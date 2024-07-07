@@ -363,7 +363,7 @@ function addCSS (){
 		var theCSS=document.createElement('link');
 		theCSS.type = 'text/css';
 		theCSS.rel='stylesheet';
-		theCSS.href='http://westciv.com/xray/xraycore.css';
+		theCSS.href='https://siz05.github.io/zibunyou/bml/xraycore.css';
 		var theCSS = theHead[0].appendChild(theCSS);
 		
 	}
