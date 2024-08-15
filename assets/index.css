@@ -5,12 +5,13 @@
   width: 70px;
   height: 70px;
 }
-header {
-  background-color: #1c1c1c;
-}
 body {
   background-color: #363535;
   color: #00f6ab;
   font-family: "ヒラギノ丸ゴ ProN","Hiragino Maru Gothic ProN";
   padding: 1em;
+}
+header {
+  background-color: #1c1c1c;
+  padding: 0em
 }
