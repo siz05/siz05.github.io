@@ -13,5 +13,6 @@ body {
 }
 header {
   background-color: #1c1c1c;
-  padding: 0em
+  padding: 0;
+  position: fixed;
 }
