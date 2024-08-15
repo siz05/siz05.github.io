@@ -12,7 +12,10 @@ body {
   padding: 1em;
 }
 header {
+  position: fixed;
   background-color: #1c1c1c;
   padding: 0;
-  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
 }
