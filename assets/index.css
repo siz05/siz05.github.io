@@ -17,8 +17,10 @@ header {
   top: 0;
   left: 0;
   width: 100%;
-  display: flex;
   opacity: 0.7;
+}
+.header {
+  display: flex;
 }
 .headertext {
   padding: 0px 0px 0px 10px;
