@@ -20,3 +20,6 @@ header {
   display: flex;
   opacity: 0.7;
 }
+.headertext {
+  padding: 0px 0px 0px 10px;
+}
