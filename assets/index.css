@@ -19,9 +19,6 @@ header {
   width: 100%;
   /* opacity: 0.9; */
 }
-.header {
-  display: flex;
-}
-.headertext {
+.flex {
   display: flex;
 }
