@@ -20,10 +20,10 @@ header {
   /* opacity: 0.9; */
 }
 #sitename {
-  padding: 0px 0px 0px 20px;
+  left: 20px;
 }
 #majorheading {
-  padding: 5px 0px 0px 20px
+  padding: 100px 0px 0px 200px
 }
 #flex {
   display: flex;
