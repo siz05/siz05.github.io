@@ -1,4 +1,4 @@
-.x-raybutton {
+#x-raybutton {
   position: fixed;
   bottom: 10%;
   right: 25%;
@@ -19,6 +19,6 @@ header {
   width: 100%;
   /* opacity: 0.9; */
 }
-.flex {
+#flex {
   display: flex;
 }
