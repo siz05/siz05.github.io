@@ -19,12 +19,9 @@ header {
   width: 100%;
   /* opacity: 0.9; */
 }
-#sitename {
-  left: 20px;
-}
-#majorheading {
-  padding: 100px 0px 0px 200px
-}
 #flex {
   display: flex;
+}
+#inheader {
+  justify-content: center;
 }
