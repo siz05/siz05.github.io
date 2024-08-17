@@ -24,4 +24,5 @@ header {
 }
 #inheader {
   justify-content: center;
+  display: flex;
 }
