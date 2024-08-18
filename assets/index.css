@@ -23,6 +23,6 @@ header {
   display: flex;
 }
 #inheader {
-  justify-content: center;
+  justify-content: space-around;
   display: flex;
 }
