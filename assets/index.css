@@ -24,5 +24,6 @@ header {
 }
 #inheader {
   justify-content: space-around;
+  align-items: center;
   display: flex;
 }
