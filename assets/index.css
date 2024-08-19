@@ -19,9 +19,6 @@ header {
   width: 100%;
   /* opacity: 0.9; */
 }
-#flex {
-  display: flex;
-}
 #inheader {
   justify-content: space-around;
   align-items: center;
