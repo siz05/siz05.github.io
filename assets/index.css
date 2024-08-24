@@ -1,3 +1,7 @@
+@font-face {
+  font-family: "monocraft"
+  src: url("https://siz05.github.io/assets/monocraft.ttf")
+}
 #x-raybutton {
   position: fixed;
   bottom: 10%;
@@ -8,7 +12,7 @@
 body {
   background-color: #363535;
   color: #00f6ab;
-  font-family: "ヒラギノ丸ゴ ProN","Hiragino Maru Gothic ProN";
+  font-family: "monocraft";
   padding: 125px 0px 0px 25px;
 }
 header {
