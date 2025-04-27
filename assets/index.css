@@ -10,14 +10,14 @@
   height: 70px;
 }
 body {
-  background-color: #363535;
-  color: #00f6ab;
+  background-color: #f1fefc;
+  color: #312e35;
   font-family: "monocraft";
   padding: 125px 0px 0px 25px;
 }
 header {
   position: fixed;
-  background-color: #1c1c1c;
+  background-color: #dfffff;
   top: 0;
   left: 0;
   width: 100%;
