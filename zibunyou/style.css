@@ -10,29 +10,43 @@ body {
   align-items: flex-start;
   margin-top: 30px;
 }
-#side {
-  margin-left: 10px;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-#info {
-  margin-top: 16px;
-  text-align: left;
-  font-size: 18px;
-}
-canvas {
+#tetris {
+  box-shadow: 0 0 10px #0ff;
   background: #111;
   border: 2px solid #fff;
   display: block;
-  margin: 0 auto 10px auto;
+  margin: 0;
 }
-#tetris {
-  box-shadow: 0 0 10px #0ff;
+#side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;   /* ここを左詰めに */
+  margin-left: 0;            /* ここを0に */
+  margin-right: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+#hold-next {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 #hold-label, #next-label {
   margin-bottom: 2px;
   color: #ccc;
   font-size: 12px;
+  text-align: left;
+}
+#hold, #next {
+  background: #111;
+  border: 2px solid #fff;
+  display: block;
+  margin: 0;
+}
+#info {
+  margin-top: 16px;
+  text-align: left;
+  font-size: 18px;
 }
