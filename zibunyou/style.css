@@ -1,90 +1,53 @@
 body {
-  background: #181818;
-  color: #fff;
+  background: #20232a;
+  color: #eee;
+  font-family: 'Meiryo', 'Arial', sans-serif;
   margin: 0;
-  font-family: "Meiryo", "Arial", sans-serif;
+  padding: 0;
 }
-
-.tetris-root {
-  width: 480px;
-  margin: 30px auto;
+#container {
   display: flex;
   flex-direction: row;
-}
-
-.left-panel {
-  width: 100px;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
+  justify-content: center;
   align-items: flex-start;
-  margin-right: 10px;
+  height: 100vh;
+  gap: 40px;
 }
-
-.hold-section {
-  background: #272727;
-  border-radius: 8px;
-  margin-bottom: 20px;
-  padding: 8px;
-  width: 96px;
-}
-
-.stats-section {
-  background: #222;
-  border-radius: 8px;
-  padding: 8px;
-  width: 96px;
-  font-size: 16px;
-  margin-top: 12px;
-}
-
-.center-panel {
-  width: 200px;
-  position: relative;
+#left-panel, #right-panel {
   display: flex;
   flex-direction: column;
   align-items: center;
 }
-
-#board {
-  background: #111;
-  border: 2px solid #aaa;
-  border-radius: 8px;
-  display: block;
-  margin: 0 auto;
+#hold-section, #info-section {
+  margin-bottom: 40px;
+  text-align: center;
 }
-
-#combo {
-  position: absolute;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 28px;
+#info-section {
+  margin-bottom: 0;
+}
+.panel-title {
   font-weight: bold;
-  text-shadow: 0 0 6px #ff0, 0 0 8px #f00;
+  font-size: 1.2em;
+  margin-bottom: 8px;
 }
-
-.right-panel {
-  width: 100px;
+#game-panel {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  margin-left: 10px;
-}
-
-.next-section {
-  background: #272727;
-  border-radius: 8px;
-  padding: 8px;
-  width: 96px;
-  display: flex;
-  flex-direction: column;
   align-items: center;
+  justify-content: center;
 }
-
-.panel-label {
-  font-size: 14px;
-  margin-bottom: 4px;
-  color: #ffeb3b;
-  letter-spacing: 1px;
+#game-canvas {
+  background: #111;
+  border: 3px solid #eee;
+  border-radius: 6px;
+  box-shadow: 0 0 16px #333;
+}
+#hold-canvas, #next-canvas {
+  background: #222;
+  border: 2px solid #555;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+#lines, #attack, #dps {
+  margin: 4px 0;
+  font-size: 1.1em;
 }

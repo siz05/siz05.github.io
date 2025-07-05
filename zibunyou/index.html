@@ -2,35 +2,29 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>PPT風テトリス</title>
-  <meta name="viewport" content="width=480,user-scalable=no">
+  <title>ぷよぷよテトリス風Tetris</title>
+  <meta name="viewport" content="width=640">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="tetris-root">
-    <div class="left-panel">
-      <div class="hold-section">
-        <div class="panel-label">HOLD</div>
-        <canvas id="hold" width="80" height="80"></canvas>
+  <div id="container">
+    <div id="left-panel">
+      <div id="hold-section">
+        <div class="panel-title">HOLD</div>
+        <canvas id="hold-canvas" width="80" height="80"></canvas>
       </div>
-      <div class="stats-section">
-        <div><span>ライン数:</span> <span id="lines">0</span></div>
-        <div><span>攻撃量:</span> <span id="atk">0</span></div>
-        <div><span>DPS:</span> <span id="dps">0.00</span></div>
+      <div id="info-section">
+        <div id="lines">Lines: 0</div>
+        <div id="attack">攻撃量: 0</div>
+        <div id="dps">DPS: 0.00</div>
       </div>
     </div>
-    <div class="center-panel">
-      <canvas id="board" width="200" height="400"></canvas>
-      <div id="combo"></div>
+    <div id="game-panel">
+      <canvas id="game-canvas" width="200" height="400"></canvas>
     </div>
-    <div class="right-panel">
-      <div class="next-section">
-        <div class="panel-label">NEXT</div>
-        <canvas id="next0" width="80" height="80"></canvas>
-        <canvas id="next1" width="80" height="80"></canvas>
-        <canvas id="next2" width="80" height="80"></canvas>
-        <canvas id="next3" width="80" height="80"></canvas>
-      </div>
+    <div id="right-panel">
+      <div class="panel-title">NEXT</div>
+      <canvas id="next-canvas" width="80" height="320"></canvas>
     </div>
   </div>
   <script src="tetris.js"></script>
