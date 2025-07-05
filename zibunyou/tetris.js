@@ -1,405 +1,415 @@
-// ぷよぷよテトリス風 TETRIS
-// DT砲/TDテンプレ対応, 各種火力, HOLD/NEXT, ARR/DAS/SDF調整, 操作感調整
+// PPT風テトリス本体
+// - DAS/ARR/SDF/ハードドロップ/ホールド/T-spin判定/REN/TETRIS/DT砲/TDテンプレ対応
+// - 火力計算はぷよぷよテトリス準拠
+// - 画面のcanvas描画
+// - 操作は C(hold), 上(HD), 下(SD), 左右移動, ぷよテト風DAS/ARR/SDF
 
-// ------------------- 設定 -------------------
-const COLS = 10, ROWS = 20, BLOCK = 20; // 1マス20px
-const DAS = 100;   // ms (初動遅延)
-const ARR = 16;    // ms (連続移動感度, 0=超高速, 16ms=ぷよテト相当)
-const SDF = 16;    // ソフトドロップ感度(16ms=ぷよテト相当)
-const GRAVITY = 1; // 1G=60fpsで1行/秒
-const LOCK_DELAY = 500; // ロックディレイ(ms)
-const NEXT_COUNT = 4;   // NEXT表示数
+// --- ゲーム定数
+const COLS = 10, ROWS = 20;
+const BLOCK = 20;
+const BOARD_W = COLS * BLOCK, BOARD_H = ROWS * BLOCK;
+const NEXT_COUNT = 4;
 
-const COLORS = {
-  I: "#00f0f0", O: "#f0f000", S: "#00f000",
-  Z: "#f00000", J: "#0000f0", L: "#f0a000", T: "#a000f0"
-};
-const EMPTY_COLOR = "#191919";
-const GHOST_COLOR = "#5559";
+// PPT準拠速度
+const DAS = 133;     // ms (ぷよテト: 133ms)
+const ARR = 16;      // ms (ぷよテト: 16ms)
+const SDF = 16;      // ms (ぷよテト: 16ms)
+const GRAVITY = 1/60; // 1G/s
 
-// ぷよぷよテトリス火力表(REN, T-SPIN, TETRIS)
-const ATTACK_TABLE = {
-  single: 0, double: 1, triple: 2, tetris: 4,
-  tspinMini: 2, tspin: { single: 2, double: 4, triple: 6 },
-  b2b: 1, ren: [0, 0, 1, 2, 3, 4, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 10]
+// キー設定
+const KEY = {
+  LEFT: 37, RIGHT: 39, DOWN: 40, UP: 38, HOLD: 67 // C
 };
 
-// ------------------- ミノ定義 -------------------
-const MINOS = {
-  I: [
-    [[0,1],[1,1],[2,1],[3,1]],
-    [[2,0],[2,1],[2,2],[2,3]],
-    [[0,2],[1,2],[2,2],[3,2]],
-    [[1,0],[1,1],[1,2],[1,3]]
-  ],
-  O: [
-    [[1,0],[2,0],[1,1],[2,1]],
-    [[1,0],[2,0],[1,1],[2,1]],
-    [[1,0],[2,0],[1,1],[2,1]],
-    [[1,0],[2,0],[1,1],[2,1]]
-  ],
-  S: [
-    [[1,0],[2,0],[0,1],[1,1]],
-    [[1,0],[1,1],[2,1],[2,2]],
-    [[1,1],[2,1],[0,2],[1,2]],
-    [[0,0],[0,1],[1,1],[1,2]]
-  ],
-  Z: [
-    [[0,0],[1,0],[1,1],[2,1]],
-    [[2,0],[1,1],[2,1],[1,2]],
-    [[0,1],[1,1],[1,2],[2,2]],
-    [[1,0],[0,1],[1,1],[0,2]]
-  ],
-  J: [
-    [[0,0],[0,1],[1,1],[2,1]],
-    [[1,0],[2,0],[1,1],[1,2]],
-    [[0,1],[1,1],[2,1],[2,2]],
-    [[1,0],[1,1],[0,2],[1,2]]
-  ],
-  L: [
-    [[2,0],[0,1],[1,1],[2,1]],
-    [[1,0],[1,1],[1,2],[2,2]],
-    [[0,1],[1,1],[2,1],[0,2]],
-    [[0,0],[1,0],[1,1],[1,2]]
-  ],
-  T: [
-    [[1,0],[0,1],[1,1],[2,1]],
-    [[1,0],[1,1],[2,1],[1,2]],
-    [[0,1],[1,1],[2,1],[1,2]],
-    [[1,0],[0,1],[1,1],[1,2]]
-  ]
-};
-const SPAWN_POS = { I: [3, 0], O: [4, 0], S: [3, 0], Z: [3, 0], J: [3, 0], L: [3, 0], T: [3, 0] };
+const COLORS = [
+  "#00f0f0", "#0000f0", "#f0a000", "#f0f000", "#00f000", "#a000f0", "#f00000"
+];
 
-// SRS回転表
+// ミノ定義(SRS, ぷよテト)
+const PIECES = [
+  { name: "I", color: 0, shape: [[0,1],[1,1],[2,1],[3,1]],
+    kicks: [[0,0],[1,0],[-2,0],[1,2],[-2,-1]], // SRS 右回転
+    spawn: {x:3,y:0}, type: 0
+  },
+  { name: "J", color: 1, shape: [[0,0],[0,1],[1,1],[2,1]], kicks: [[0,0],[1,0],[1,1],[0,-2],[1,-2]], spawn: {x:3,y:0}, type: 1 },
+  { name: "L", color: 2, shape: [[2,0],[0,1],[1,1],[2,1]], kicks: [[0,0],[1,0],[1,1],[0,-2],[1,-2]], spawn: {x:3,y:0}, type: 2 },
+  { name: "O", color: 3, shape: [[1,0],[2,0],[1,1],[2,1]], kicks: [[0,0]], spawn: {x:4,y:0}, type: 3 },
+  { name: "S", color: 4, shape: [[1,0],[2,0],[0,1],[1,1]], kicks: [[0,0],[1,0],[1,1],[0,-2],[1,-2]], spawn: {x:3,y:0}, type: 4 },
+  { name: "T", color: 5, shape: [[1,0],[0,1],[1,1],[2,1]], kicks: [[0,0],[1,0],[1,1],[0,-2],[1,-2]], spawn: {x:3,y:0}, type: 5 },
+  { name: "Z", color: 6, shape: [[0,0],[1,0],[1,1],[2,1]], kicks: [[0,0],[1,0],[1,1],[0,-2],[1,-2]], spawn: {x:3,y:0}, type: 6 }
+];
+
+// SRS回転テーブル
 const SRS = {
-  I: [
-    [[0,0],[0,0],[-2,0],[1,0],[-2,-1],[1,2]],
-    [[0,0],[0,0],[-1,0],[2,0],[-1,2],[2,-1]],
-    [[0,0],[0,0],[2,0],[-1,0],[2,1],[-1,-2]],
-    [[0,0],[0,0],[1,0],[-2,0],[1,-2],[-2,1]]
+  // 通常ブロック
+  normal: [
+    [[0,0],[ -1,0 ],[ -1,1 ],[ 0,-2 ],[ -1,-2 ]], // 0->R
+    [[0,0],[ 1,0 ],[ 1,-1 ],[ 0,2 ],[ 1,2 ]],     // R->0
+    [[0,0],[ 1,0 ],[ 1,1 ],[ 0,-2 ],[ 1,-2 ]],    // R->2
+    [[0,0],[ -1,0 ],[ -1,-1 ],[ 0,2 ],[ -1,2 ]],  // 2->R
+    [[0,0],[ 1,0 ],[ 1,1 ],[ 0,-2 ],[ 1,-2 ]],    // 2->3
+    [[0,0],[ -1,0 ],[ -1,-1 ],[ 0,2 ],[ -1,2 ]],  // 3->2
+    [[0,0],[ -1,0 ],[ -1,1 ],[ 0,-2 ],[ -1,-2 ]], // 3->0
+    [[0,0],[ 1,0 ],[ 1,-1 ],[ 0,2 ],[ 1,2 ]]      // 0->3
   ],
-  JLSTZ: [
-    [[0,0],[0,0],[-1,0],[-1,1],[0,-2],[-1,-2]],
-    [[0,0],[0,0],[1,0],[1,-1],[0,2],[1,2]],
-    [[0,0],[0,0],[1,0],[1,1],[0,-2],[1,-2]],
-    [[0,0],[0,0],[-1,0],[-1,-1],[0,2],[-1,2]]
+  // Iブロック
+  I: [
+    [[0,0],[ -2,0 ],[ 1,0 ],[ -2,-1 ],[ 1,2 ]],   // 0->R
+    [[0,0],[ 2,0 ],[ -1,0 ],[ 2,1 ],[ -1,-2 ]],   // R->0
+    [[0,0],[ -1,0 ],[ 2,0 ],[ -1,2 ],[ 2,-1 ]],   // R->2
+    [[0,0],[ 1,0 ],[ -2,0 ],[ 1,-2 ],[ -2,1 ]],   // 2->R
+    [[0,0],[ 2,0 ],[ -1,0 ],[ 2,1 ],[ -1,-2 ]],   // 2->3
+    [[0,0],[ -2,0 ],[ 1,0 ],[ -2,-1 ],[ 1,2 ]],   // 3->2
+    [[0,0],[ 1,0 ],[ -2,0 ],[ 1,-2 ],[ -2,1 ]],   // 3->0
+    [[0,0],[ -1,0 ],[ 2,0 ],[ -1,2 ],[ 2,-1 ]]    // 0->3
   ]
 };
 
-// ------------------- ユーティリティ -------------------
-function clone(obj){ return JSON.parse(JSON.stringify(obj)); }
-function randint(a, b){ return Math.floor(Math.random()*(b-a+1))+a; }
-function now(){ return performance.now(); }
+// 火力表（ぷよテト準拠）
+const GARBAGE_TABLE = {
+  1: 0, 2: 1, 3: 2, 4: 4, // single/double/triple/tetris
+  tmini: 0,
+  tspin0: 2,
+  tspin1: 2,
+  tspin2: 4,
+  tspin3: 6,
+  btb: 1,
+  ren: [0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10]
+};
 
-// ------------------- ゲーム状態 -------------------
-let field = Array.from({length:ROWS},()=>Array(COLS).fill(""));
-let hold = "", holdUsed = false;
-let nexts = [];
-let current = null, currentPos = null, currentRot = 0;
-let gameOver = false;
-let lines = 0, attacks = 0, dps = 0, ren = 0, b2b = false, lastClearTime = null;
-let eventText = "";
-let timerId = null, gravityTick = 0, lockTick = null;
-let keyStates = {}, moveDir = 0, lastMove = 0, dasTick = 0, arrTick = 0, softDropTick = 0;
-let lastFrameTime = now(), startTime = now();
+let board, current, hold, holdUsed, next, combo, b2b, ren, lines, atk, dropStart, dropTime;
+let stats = { lines:0, atk:0, drops:0, start:0, lastAttack:0 };
+let dasTimer = null, arrTimer = null, moveDir = 0, inputStack = [];
+let softDrop = false, gravity = 0, lockDelay = 0;
 
-// ------------------- 描画 -------------------
-function draw(){
-  // メイン
-  let ctx = document.getElementById('game-canvas').getContext('2d');
-  ctx.clearRect(0,0,COLS*BLOCK,ROWS*BLOCK);
-
-  // フィールド
-  for(let y=0; y<ROWS; y++)
-    for(let x=0; x<COLS; x++)
-      drawBlock(ctx, x, y, field[y][x]||EMPTY_COLOR);
-
-  // ゴースト
-  if(current){
-    let ghostY = getGhostY();
-    drawMino(ctx, current, currentPos[0], ghostY, currentRot, GHOST_COLOR, 0.4);
-  }
-
-  // ミノ
-  if(current)
-    drawMino(ctx, current, currentPos[0], currentPos[1], currentRot, COLORS[current]);
-
-  // HOLD
-  let hctx = document.getElementById('hold-canvas').getContext('2d');
-  hctx.clearRect(0,0,80,80);
-  if(hold)
-    drawMino(hctx, hold, 1, 1, 0, COLORS[hold], 1, 16);
-
-  // NEXT
-  for(let i=0; i<NEXT_COUNT; i++){
-    let nctx = document.getElementById('next-canvas-'+i).getContext('2d');
-    nctx.clearRect(0,0,80,80);
-    if(nexts[i])
-      drawMino(nctx, nexts[i], 1, 1, 0, COLORS[nexts[i]], 1, 16);
-  }
-
-  // ステータス
-  document.getElementById('line-count').textContent = lines;
-  document.getElementById('attack-count').textContent = attacks;
-  let t = Math.max(now()-startTime, 1)/1000;
-  document.getElementById('dps-count').textContent = (attacks/t).toFixed(2);
-
-  // イベント
-  document.getElementById('event-text').textContent = eventText;
-}
-function drawBlock(ctx, x, y, color, alpha=1){
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.fillStyle = color;
-  ctx.fillRect(x*BLOCK, y*BLOCK, BLOCK, BLOCK);
-  ctx.strokeStyle = "#333";
-  ctx.strokeRect(x*BLOCK, y*BLOCK, BLOCK, BLOCK);
-  ctx.restore();
-}
-function drawMino(ctx, type, px, py, rot, color, alpha=1, block=20){
-  let mino = MINOS[type][rot];
-  for(let [dx,dy] of mino)
-    drawBlock(ctx, px+dx, py+dy, color, alpha, block);
-}
-function drawBlock(ctx, x, y, color, alpha=1, block=20){
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.fillStyle = color;
-  ctx.fillRect(x*block, y*block, block, block);
-  ctx.strokeStyle = "#333";
-  ctx.strokeRect(x*block, y*block, block, block);
-  ctx.restore();
+function resetGame() {
+  board = Array.from({length:ROWS}, ()=>Array(COLS).fill(-1));
+  current = spawnPiece();
+  hold = null;
+  holdUsed = false;
+  next = [];
+  for(let i=0; i<NEXT_COUNT+2; ++i) next.push(randomPiece());
+  combo = 0;
+  b2b = false;
+  ren = 0;
+  lines = 0;
+  atk = 0;
+  stats = { lines:0, atk:0, drops:0, start:Date.now(), lastAttack:0 };
+  dropStart = Date.now();
+  dropTime = dropStart;
+  gravity = 0;
+  lockDelay = 0;
+  drawAll();
 }
 
-// ------------------- ミノ操作 -------------------
-function canPlace(type, x, y, rot){
-  let mino = MINOS[type][rot];
-  for(let [dx,dy] of mino){
-    let nx = x+dx, ny = y+dy;
-    if(nx<0||nx>=COLS||ny<0||ny>=ROWS) return false;
-    if(field[ny][nx]) return false;
-  }
-  return true;
-}
-function hardDrop(){
-  let gy = getGhostY();
-  currentPos[1] = gy;
-  placeMino();
-}
-function getGhostY(){
-  let [x,y] = currentPos, rot = currentRot, type = current;
-  let mino = MINOS[type][rot];
-  outer: for(let gy=y; gy<ROWS; gy++){
-    for(let [dx,dy] of mino){
-      let nx=x+dx, ny=gy+dy;
-      if(ny>=ROWS || field[ny][nx]) return gy-1;
+function randomPiece() {
+  if(!randomPiece.bag || randomPiece.bag.length === 0) {
+    randomPiece.bag = [...Array(7).keys()];
+    for(let i=6;i>0;--i) {
+      const j = Math.floor(Math.random()*(i+1));
+      [randomPiece.bag[i],randomPiece.bag[j]] = [randomPiece.bag[j],randomPiece.bag[i]];
     }
   }
-  return ROWS-1;
+  return PIECES[randomPiece.bag.pop()];
 }
-function move(dx){
-  let [x,y] = currentPos;
-  if(canPlace(current,x+dx,y,currentRot)){
-    currentPos[0] += dx;
-    lockTick = null;
-    draw();
+
+function spawnPiece() {
+  let piece = next.shift();
+  next.push(randomPiece());
+  piece = {...piece};
+  piece.x = piece.spawn.x;
+  piece.y = piece.spawn.y;
+  piece.r = 0;
+  piece.lastMove = Date.now();
+  holdUsed = false;
+  return piece;
+}
+
+function getPieceBlocks(p, r=p.r, x=p.x, y=p.y) {
+  let shape = PIECES[p.type].shape;
+  let pts = shape.map(([px,py]) => rotate(px,py,r,p.type));
+  return pts.map(([dx,dy]) => [dx+x, dy+y]);
+}
+
+function rotate(x,y,r,type) {
+  if(type === 3) { // O
+    return [x,y];
+  }
+  if(type === 0) { // I
+    if(r===0) return [x,y];
+    if(r===1) return [y,3-x];
+    if(r===2) return [3-x,3-y];
+    if(r===3) return [3-y,x];
+  }
+  // 標準SRS
+  if(r===0) return [x,y];
+  if(r===1) return [y,2-x];
+  if(r===2) return [2-x,2-y];
+  if(r===3) return [2-y,x];
+}
+
+function canMove(p,x,y,r) {
+  let blocks = getPieceBlocks(p,r,x,y);
+  return blocks.every(([cx,cy])=>
+    cx>=0 && cx<COLS && cy<ROWS && (cy<0 || board[cy][cx]===-1));
+}
+
+function move(dx,dy) {
+  if(canMove(current,current.x+dx,current.y+dy,current.r)) {
+    current.x += dx;
+    current.y += dy;
+    drawAll();
     return true;
   }
   return false;
 }
-function softDrop(){
-  let [x,y] = currentPos;
-  if(canPlace(current,x,y+1,currentRot)){
-    currentPos[1] += 1;
-    draw();
-    return true;
-  }else{
-    // 接地
-    placeMino();
-    return false;
-  }
-}
-function rotate(dir){
-  let type = current, rot = currentRot;
-  let base = (rot+4+dir)%4;
-  let kicks = (type==="I")?SRS.I:SRS.JLSTZ;
-  let from = rot, to = base;
-  for(let i=0;i<kicks[from].length;i++){
-    let [kx,ky] = kicks[from][i];
-    let nx = currentPos[0]+kx, ny = currentPos[1]+ky;
-    if(canPlace(type,nx,ny,base)){
-      currentPos = [nx,ny];
-      currentRot = base;
-      lockTick = null;
-      draw();
+
+function rotatePiece(dir) {
+  let oldR = current.r;
+  let newR = (current.r+dir+4)%4;
+  let type = current.type;
+  let srs = (type===0)?SRS.I:SRS.normal;
+  let offset = ((dir===1)?0:1)+(oldR%2)*2;
+  for(let i=0;i<5;++i) {
+    let [ox,oy] = srs[offset*2+i];
+    let nx = current.x+ox, ny = current.y+oy;
+    if(canMove(current,nx,ny,newR)) {
+      current.r = newR;
+      current.x = nx;
+      current.y = ny;
+      drawAll();
       return;
     }
   }
 }
-function holdMino(){
+
+function holdPiece() {
   if(holdUsed) return;
-  [current, hold] = [hold||next(), current];
-  currentPos = SPAWN_POS[current].slice();
-  currentRot = 0;
+  if(hold) {
+    [hold,current] = [current,hold];
+    current.x = PIECES[current.type].spawn.x;
+    current.y = PIECES[current.type].spawn.y;
+    current.r = 0;
+  } else {
+    hold = current;
+    current = spawnPiece();
+  }
   holdUsed = true;
-  if(!canPlace(current, currentPos[0], currentPos[1], currentRot))
-    return gameOverFunc();
+  drawAll();
 }
 
-// ------------------- ロジック -------------------
-function next(){
-  if(nexts.length<7){
-    let bag = shuffle(["I","O","S","Z","J","L","T"]);
-    nexts.push(...bag);
+function hardDrop() {
+  let y = current.y;
+  while(canMove(current,current.x,y+1,current.r)) y++;
+  current.y = y;
+  placePiece();
+}
+
+function softDropStart() {
+  softDrop = true;
+}
+
+function softDropEnd() {
+  softDrop = false;
+}
+
+function placePiece() {
+  let blocks = getPieceBlocks(current);
+  blocks.forEach(([x,y])=>{
+    if(y>=0) board[y][x] = current.color;
+  });
+  let [line, tspin, mini] = checkLinesAndTSpin();
+  lines += line;
+  stats.lines += line;
+  let fire = calcAtk(line, tspin, mini);
+  atk += fire;
+  stats.atk += fire;
+  if(line>0) stats.lastAttack = Date.now();
+  current = spawnPiece();
+  if(!canMove(current,current.x,current.y,current.r)) {
+    setTimeout(resetGame, 1000);
   }
-  return nexts.shift();
+  drawAll();
 }
-function shuffle(arr){
-  for(let i=arr.length-1;i>0;i--){
-    let j = randint(0,i);
-    [arr[i],arr[j]]=[arr[j],arr[i]];
+
+function calcAtk(line, tspin, mini) {
+  let btbUsed = false;
+  let atk = 0;
+  if(tspin) {
+    if(line===1) atk = (mini ? GARBAGE_TABLE.tmini : GARBAGE_TABLE.tspin1);
+    else if(line===2) atk = GARBAGE_TABLE.tspin2;
+    else if(line===3) atk = GARBAGE_TABLE.tspin3;
+    btbUsed = true;
+  } else {
+    atk = GARBAGE_TABLE[line] || 0;
+    if(line===4) btbUsed = true;
   }
-  return arr;
-}
-function spawnMino(){
-  current = next();
-  currentPos = SPAWN_POS[current].slice();
-  currentRot = 0;
-  holdUsed = false;
-  if(!canPlace(current, currentPos[0], currentPos[1], currentRot))
-    return gameOverFunc();
-}
-function placeMino(){
-  let mino = MINOS[current][currentRot];
-  for(let [dx,dy] of mino){
-    let nx=currentPos[0]+dx, ny=currentPos[1]+dy;
-    if(ny<0) return gameOverFunc();
-    field[ny][nx]=COLORS[current];
+  // B2B
+  if(btbUsed) {
+    if(b2b) atk += GARBAGE_TABLE.btb;
+    b2b = true;
+  } else {
+    b2b = false;
   }
-  clearLines();
-  spawnMino();
-}
-function clearLines(){
-  let clears = [];
-  for(let y=0; y<ROWS; y++)
-    if(field[y].every(cell=>cell)) clears.push(y);
-  if(clears.length){
-    for(let y of clears)
-      field.splice(y,1), field.unshift(Array(COLS).fill(""));
-    lines += clears.length;
-    let atk = calcAttack(clears.length);
-    attacks += atk;
-    eventText = ["SINGLE","DOUBLE","TRIPLE","TETRIS"][clears.length-1]||"";
-    if(isTSpin()){
-      eventText = `T-SPIN${clears.length===1?' SINGLE':clears.length===2?' DOUBLE':clears.length===3?' TRIPLE':''}`;
-      atk = calcAttackTSpin(clears.length, isMiniTSpin());
-      attacks += atk;
-    }
-    if(isB2B(clears.length)) atk += ATTACK_TABLE.b2b;
-    if(ren>0) atk += ATTACK_TABLE.ren[Math.min(ren,ATTACK_TABLE.ren.length-1)];
+  // REN
+  if(line>0) {
     ren++;
-    b2b = isB2B(clears.length);
-    lastClearTime = now();
-  }else{
-    eventText = "";
-    ren=0;
-    b2b=false;
+    atk += GARBAGE_TABLE.ren[Math.min(ren,20)];
+  } else {
+    ren = 0;
   }
-}
-function isTSpin(){
-  // Tミノで回転直後で角3つ以上埋まってる
-  if(current!=="T") return false;
-  // 実装簡易化: 常にT-Spin検出(ぷよテトの厳密判定は省略)
-  return true;
-}
-function isMiniTSpin(){ return false; }
-function isB2B(line){
-  return line===4 || (current==="T"&&line>0);
-}
-function calcAttack(line){
-  return [0,ATTACK_TABLE.single,ATTACK_TABLE.double,ATTACK_TABLE.triple,ATTACK_TABLE.tetris][line]||0;
-}
-function calcAttackTSpin(line,mini){
-  if(mini) return ATTACK_TABLE.tspinMini;
-  return [0,ATTACK_TABLE.tspin.single,ATTACK_TABLE.tspin.double,ATTACK_TABLE.tspin.triple][line]||0;
-}
-function gameOverFunc(){
-  gameOver = true;
-  eventText = "GAME OVER";
-  clearInterval(timerId);
-  draw();
+  return atk;
 }
 
-// ------------------- 入力 -------------------
-window.addEventListener('keydown', e=>{
-  if(gameOver) return;
+function checkLinesAndTSpin() {
+  // Tスピン判定
+  let tspin = false, mini = false;
+  if(current.type===5) { // T
+    let t = current;
+    let centerX = t.x+1, centerY = t.y+1;
+    let cnt = 0;
+    [[0,0],[2,0],[0,2],[2,2]].forEach(([dx,dy])=>{
+      let x = centerX+dx-1, y = centerY+dy-1;
+      if(y>=0 && (x<0||x>=COLS||y>=ROWS||board[y][x]!==-1)) cnt++;
+    });
+    if(cnt>=3) tspin = true;
+    // mini判定: 片側しか蹴ってなければmini
+    if(tspin && (t.r%2)!==0) mini = true;
+  }
+  // 消去
+  let del = [];
+  for(let y=0;y<ROWS;++y) {
+    if(board[y].every(c=>c!==-1)) del.push(y);
+  }
+  del.forEach(y=>board.splice(y,1));
+  while(board.length<ROWS) board.unshift(Array(COLS).fill(-1));
+  return [del.length, tspin, mini];
+}
+
+// --- 入力管理
+window.addEventListener('keydown',e=>{
   if(e.repeat) return;
-  keyStates[e.code]=true;
-  if(e.code==="ArrowLeft"||e.code==="ArrowRight"){ moveDir = (e.code==="ArrowLeft"?-1:1); dasTick = now(); arrTick = now(); tryMove(); }
-  if(e.code==="ArrowDown"){ softDrop(); softDropTick = now(); }
-  if(e.code==="ArrowUp"){ hardDrop(); }
-  if(e.code==="KeyZ"){ rotate(-1); }
-  if(e.code==="KeyX"||e.code==="KeyC"){ rotate(1); }
-  if(e.code==="ShiftLeft"||e.code==="ShiftRight"){ holdMino(); }
+  switch(e.keyCode) {
+    case KEY.LEFT: startMove(-1); break;
+    case KEY.RIGHT: startMove(1); break;
+    case KEY.DOWN: softDropStart(); break;
+    case KEY.UP: hardDrop(); break;
+    case KEY.HOLD: holdPiece(); break;
+  }
 });
-window.addEventListener('keyup', e=>{
-  keyStates[e.code]=false;
-  if(e.code==="ArrowLeft"||e.code==="ArrowRight"){ moveDir = 0; }
+window.addEventListener('keyup',e=>{
+  switch(e.keyCode) {
+    case KEY.LEFT:
+    case KEY.RIGHT: stopMove(); break;
+    case KEY.DOWN: softDropEnd(); break;
+  }
 });
-function tryMove(){
-  if(moveDir!==0) move(moveDir);
+
+function startMove(dir) {
+  moveDir = dir;
+  move(dir,0);
+  if(dasTimer) clearTimeout(dasTimer);
+  if(arrTimer) clearInterval(arrTimer);
+  dasTimer = setTimeout(()=>{
+    arrTimer = setInterval(()=>{
+      move(moveDir,0);
+    }, ARR);
+  }, DAS);
 }
 
-// ------------------- ループ -------------------
-function gameLoop(){
-  let t = now();
-  // 横移動DAS/ARR
-  if(moveDir!==0){
-    if(keyStates[moveDir===-1?"ArrowLeft":"ArrowRight"]){
-      if(t-dasTick>DAS){
-        if(t-arrTick>ARR){
-          move(moveDir);
-          arrTick = t;
-        }
+function stopMove() {
+  moveDir = 0;
+  if(dasTimer) clearTimeout(dasTimer);
+  if(arrTimer) clearInterval(arrTimer);
+}
+
+// --- 描画
+function drawAll() {
+  drawBoard();
+  drawHold();
+  drawNext();
+  drawStats();
+}
+
+function drawBoard() {
+  let ctx = document.getElementById('board').getContext('2d');
+  ctx.clearRect(0,0,BOARD_W,BOARD_H);
+  // フィールド
+  for(let y=0;y<ROWS;++y)
+    for(let x=0;x<COLS;++x)
+      if(board[y][x]!==-1) drawBlock(ctx,x,y,COLORS[board[y][x]]);
+  // ゴースト
+  let ghostY = current.y;
+  while(canMove(current,current.x,ghostY+1,current.r)) ghostY++;
+  getPieceBlocks(current).forEach(([x,y])=>{
+    if(y>=0) drawBlock(ctx,x,ghostY,COLORS[current.color],0.3);
+  });
+  // 現在のミノ
+  getPieceBlocks(current).forEach(([x,y])=>{
+    if(y>=0) drawBlock(ctx,x,y,COLORS[current.color],1.0);
+  });
+}
+
+function drawBlock(ctx,x,y,color,alpha=1.0) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = color;
+  ctx.fillRect(x*BLOCK,y*BLOCK,BLOCK,BLOCK);
+  ctx.strokeStyle = "#fff";
+  ctx.strokeRect(x*BLOCK+0.5,y*BLOCK+0.5,BLOCK-1,BLOCK-1);
+  ctx.restore();
+}
+
+function drawHold() {
+  let ctx = document.getElementById('hold').getContext('2d');
+  ctx.clearRect(0,0,80,80);
+  if(hold) drawPiece(ctx, hold, 1, 1);
+}
+
+function drawNext() {
+  for(let i=0;i<NEXT_COUNT;++i) {
+    let ctx = document.getElementById('next'+i).getContext('2d');
+    ctx.clearRect(0,0,80,80);
+    drawPiece(ctx, next[i], 1, 1);
+  }
+}
+
+function drawPiece(ctx, p, ox, oy) {
+  PIECES[p.type].shape.forEach(([x,y])=>{
+    let [dx,dy] = rotate(x,y,0,p.type);
+    drawBlock(ctx,dx+ox,dy+oy,COLORS[p.color]);
+  });
+}
+
+function drawStats() {
+  document.getElementById('lines').textContent = lines;
+  document.getElementById('atk').textContent = atk;
+  let sec = (Date.now()-stats.start)/1000;
+  let dps = stats.atk/(sec||1);
+  document.getElementById('dps').textContent = dps.toFixed(2);
+}
+
+// --- ゲームループ
+function gameLoop() {
+  let now = Date.now();
+  let dt = (now-dropTime)/1000;
+  dropTime = now;
+  gravity += (softDrop? (1/SDF) : GRAVITY) * dt * 60;
+  let moved = false;
+  while(gravity>=1) {
+    if(move(0,1)) moved = true;
+    else {
+      if(lockDelay++>30) { // 約0.5秒
+        placePiece();
+        lockDelay = 0;
+        gravity = 0;
       }
+      break;
     }
+    gravity--;
   }
-  // ソフトドロップ
-  if(keyStates["ArrowDown"]){
-    if(t-softDropTick>SDF){
-      softDrop();
-      softDropTick = t;
-    }
-  }
-  // 自然落下
-  gravityTick += t-lastFrameTime;
-  if(gravityTick>1000/GRAVITY){
-    if(!softDrop()) gravityTick=0;
-    else gravityTick=0;
-  }
-  // ロックディレイ
-  if(lockTick==null && !canPlace(current, currentPos[0], currentPos[1]+1, currentRot))
-    lockTick = t;
-  if(lockTick!=null && t-lockTick>LOCK_DELAY)
-    placeMino();
-  lastFrameTime = t;
-  draw();
-  if(!gameOver) timerId = setTimeout(gameLoop, 16);
+  if(!moved) lockDelay++;
+  requestAnimationFrame(gameLoop);
 }
-
-// ------------------- 初期化 -------------------
-function reset(){
-  field = Array.from({length:ROWS},()=>Array(COLS).fill(""));
-  hold = ""; holdUsed = false;
-  nexts = [];
-  lines = 0; attacks = 0; dps = 0; ren = 0; b2b = false;
-  eventText = ""; gameOver = false;
-  startTime = now();
-  spawnMino();
-  draw();
-  gravityTick = 0; lockTick = null; lastFrameTime = now();
-  clearInterval(timerId); timerId = setTimeout(gameLoop, 16);
-}
-reset();
-document.body.addEventListener("click", ()=>{ if(gameOver)reset(); });
+resetGame();
+gameLoop();
