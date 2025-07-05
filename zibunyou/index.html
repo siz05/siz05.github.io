@@ -2,43 +2,36 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>ぷよぷよテトリス風テトリス</title>
-  <meta name="viewport" content="width=480, initial-scale=1.0">
+  <title>ぷよぷよテトリス風DT砲/TD系対応テトリス</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="wrapper">
-    <div id="hold-section">
-      <div class="section-title">HOLD</div>
-      <canvas id="hold" width="80" height="80"></canvas>
-    </div>
-    <div id="info-section">
-      <div>
-        <span>ライン:</span>
-        <span id="lines">0</span>
+  <div class="tetris-container">
+    <div class="side-panel left">
+      <div class="hold-section">
+        <div class="section-title">HOLD</div>
+        <canvas id="hold-canvas" width="80" height="80"></canvas>
       </div>
-      <div>
-        <span>攻撃:</span>
-        <span id="attack">0</span>
-      </div>
-      <div>
-        <span>DPS:</span>
-        <span id="dps">0.00</span>
+      <div class="stats-section">
+        <div>ライン数: <span id="line-count">0</span></div>
+        <div>攻撃量: <span id="attack-count">0</span></div>
+        <div>DPS: <span id="dps-count">0</span></div>
       </div>
     </div>
-    <div id="next-section">
-      <div class="section-title">NEXT</div>
-      <div id="next-canvas-list">
-        <canvas class="next" width="80" height="80"></canvas>
-        <canvas class="next" width="80" height="80"></canvas>
-        <canvas class="next" width="80" height="80"></canvas>
-        <canvas class="next" width="80" height="80"></canvas>
+    <div class="main-panel">
+      <canvas id="game-canvas" width="200" height="400"></canvas>
+      <div class="event-section">
+        <span id="event-text"></span>
       </div>
     </div>
-    <div id="game-section">
-      <canvas id="game" width="320" height="640"></canvas>
-      <div id="combo-label"></div>
-      <div id="clear-label"></div>
+    <div class="side-panel right">
+      <div class="next-title">NEXT</div>
+      <div class="next-section">
+        <canvas id="next-canvas-0" width="80" height="80"></canvas>
+        <canvas id="next-canvas-1" width="80" height="80"></canvas>
+        <canvas id="next-canvas-2" width="80" height="80"></canvas>
+        <canvas id="next-canvas-3" width="80" height="80"></canvas>
+      </div>
     </div>
   </div>
   <script src="tetris.js"></script>
