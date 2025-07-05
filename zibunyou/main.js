@@ -96,7 +96,7 @@ let score = 0, lines = 0, ren = -1, b2b = false, garbage = 0;
 let gameOverFlag = false;
 let lastDropWasHard = false;
 
-// --- シンプルな回転とTスピン判定 ---
+// --- シンプルな回転とTスピン判定（DT砲/TDどちらも通る超ゆる回転！） ---
 let lastTSpin = false;
 let lastRotated = false;
 
@@ -126,10 +126,10 @@ function rotate(dir) {
     if (gameOverFlag) return;
     let oldR = pos.r;
     let newR = (oldR + dir + 4) % 4;
-    // ±1マス左右、±2マス上下を許容
+    // 超広範囲キック: ±2横, ±3縦を許容
     let rotated = false;
-    for (let kx = -1; kx <= 1; kx++) {
-        for (let ky = -2; ky <= 2; ky++) {
+    for (let kx = -2; kx <= 2; kx++) {
+        for (let ky = -3; ky <= 3; ky++) {
             let nx = pos.x + kx;
             let ny = pos.y + ky;
             if (isValid(nx, ny, newR)) {
