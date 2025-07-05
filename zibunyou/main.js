@@ -119,6 +119,11 @@ let score = 0, lines = 0, ren = -1, b2b = false, garbage = 0;
 let gameOverFlag = false;
 let lastDropWasHard = false;
 
+// --- Tスピン情報フラグ ---
+let lastTSpin = false;
+let lastMini = false;
+let lastRotated = false;
+
 // --- DAS/ARR制御 ---
 let moveDir = 0; // -1=左, 1=右, 0=なし
 let dasTimer = null;
@@ -157,7 +162,9 @@ function spawnTetromino() {
     lockStartTime = null;
     lockResets = 0;
     lastDropWasHard = false;
-    lastSpinType = 0;
+    lastTSpin = false;
+    lastMini = false;
+    lastRotated = false;
     if (!isValid(pos.x, pos.y, pos.r)) {
         gameOverFlag = true;
         setTimeout(()=>alert('Game Over'), 150);
@@ -197,9 +204,6 @@ function srsIndex(from, to) {
     return 0;
 }
 
-// --- Tスピン種別管理 ---
-let lastSpinType = 0; // 0=none, 1=mini, 2=normal
-
 // --- SRS回転/キック完全対応（Tスピン種別判定付き） ---
 function rotate(dir) {
     if (gameOverFlag) return;
@@ -208,43 +212,34 @@ function rotate(dir) {
     const shapeType = current === 'I' ? 'I' : 'normal';
     const kickTable = SRS_KICK[shapeType];
     const idx = srsIndex(oldR, newR);
-    let kicked = false;
-    let kickIndex = 0;
-    for (let i = 0; i < kickTable[idx].length; i++) {
-        let [kx, ky] = kickTable[idx][i];
+    let rotated = false, kicked = false;
+    for (let [kx, ky] of kickTable[idx]) {
         let nx = pos.x + kx;
         let ny = pos.y + ky;
         if (isValid(nx, ny, newR)) {
             pos.x = nx;
             pos.y = ny;
             pos.r = newR;
+            rotated = true;
             kicked = (kx !== 0 || ky !== 0);
-            kickIndex = i;
             resetLockDelay();
             draw();
             break;
         }
     }
-    // Tスピン種別判定
-    if (current === 'T') {
-        // 角3つ以上
+    // --- Tスピンフラグ更新（回転直後の位置で判定！）---
+    if (current === 'T' && rotated) {
         let corners = [[0,0],[2,0],[0,2],[2,2]].filter(([dx,dy])=>{
-            let nx = pos.x + dx - 1, ny = pos.y + dy - 1;
-            return (ny < 0 || nx < 0 || nx >= COLS || ny >= ROWS || board[ny][nx]);
+            let cx = pos.x + dx - 1, cy = pos.y + dy - 1;
+            return (cy < 0 || cx < 0 || cx >= COLS || cy >= ROWS || board[cy][cx]);
         }).length;
-        // MINI条件: kickedかつ、上2つ角のうち床側に面している数が2未満
-        // SRSでは回転方向によってMINIが無効になるパターンもあるが、ぷよテトではkickedならMINI
-        if (corners >= 3) {
-            if (kicked && (kickIndex > 0)) {
-                lastSpinType = 1; // MINI
-            } else {
-                lastSpinType = 2; // normal
-            }
-        } else {
-            lastSpinType = 0;
-        }
+        lastTSpin = (corners >= 3);
+        lastMini = lastTSpin && kicked;
+        lastRotated = true;
     } else {
-        lastSpinType = 0;
+        lastTSpin = false;
+        lastMini = false;
+        lastRotated = false;
     }
 }
 
@@ -311,9 +306,13 @@ function place() {
     const atk = calcGarbage(cleared, tspin, tspinMini);
     garbage += atk;
     spawnTetromino();
+    // 設置後はフラグリセット
+    lastTSpin = false;
+    lastMini = false;
+    lastRotated = false;
 }
 
-// --- 行消し & Tスピン種別返却 ---
+// --- 行消し & Tスピン種別返却（設置直前の回転情報だけ見る！） ---
 function clearLines() {
     let cleared = 0;
     for (let y = ROWS-1; y >= 0; y--) {
@@ -324,11 +323,11 @@ function clearLines() {
             y++;
         }
     }
-    // Tスピン種別返却
+    // 設置直前に回転したかどうかのみでTスピン判定
     let tspin = false, tspinMini = false;
-    if (current === 'T') {
-        if (lastSpinType === 2 && cleared > 0) tspin = true;
-        if (lastSpinType === 1 && cleared > 0) tspinMini = true;
+    if (current === 'T' && lastRotated) {
+        if (lastMini && cleared > 0) tspinMini = true;
+        if (lastTSpin && !lastMini && cleared > 0) tspin = true;
     }
     if (cleared) {
         lines += cleared;
