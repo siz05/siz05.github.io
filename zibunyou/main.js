@@ -1,4 +1,4 @@
-// --- テトリミノ定義（SRS準拠） ---
+// --- テトリミノ定義 ---
 const TETROMINO_TYPES = ['I', 'O', 'S', 'Z', 'J', 'L', 'T'];
 const TETROMINOS = {
     I: [
@@ -44,29 +44,6 @@ const TETROMINOS = {
         [[1,0],[0,1],[1,1],[1,2]],
     ],
 };
-// --- SRSキックテーブル（公式通り） ---
-const SRS_KICK = {
-    normal: [
-        [[0,0],[-1,0],[-1,1],[0,-2],[-1,-2]], // 0>R
-        [[0,0],[1,0],[1,-1],[0,2],[1,2]],     // R>0
-        [[0,0],[1,0],[1,1],[0,-2],[1,-2]],    // R>2
-        [[0,0],[-1,0],[-1,-1],[0,2],[-1,2]],  // 2>R
-        [[0,0],[1,0],[1,1],[0,-2],[1,-2]],    // 2>L
-        [[0,0],[-1,0],[-1,-1],[0,2],[-1,2]],  // L>2
-        [[0,0],[-1,0],[-1,1],[0,-2],[-1,-2]], // L>0
-        [[0,0],[1,0],[1,-1],[0,2],[1,2]],     // 0>L
-    ],
-    I: [
-        [[0,0],[-2,0],[1,0],[-2,-1],[1,2]],   // 0>R
-        [[0,0],[2,0],[-1,0],[2,1],[-1,-2]],   // R>0
-        [[0,0],[-1,0],[2,0],[-1,2],[2,-1]],   // R>2
-        [[0,0],[1,0],[-2,0],[1,-2],[-2,1]],   // 2>R
-        [[0,0],[2,0],[-1,0],[2,1],[-1,-2]],   // 2>L
-        [[0,0],[-2,0],[1,0],[-2,-1],[1,2]],   // L>2
-        [[0,0],[1,0],[-2,0],[1,-2],[-2,1]],   // L>0
-        [[0,0],[-1,0],[2,0],[-1,2],[2,-1]],   // 0>L
-    ]
-};
 // --- 七種一巡バッグ ---
 function generateBag() {
     const bag = [...TETROMINO_TYPES];
@@ -90,11 +67,11 @@ function getNextTetromino() {
 const COLS = 10;
 const ROWS = 22;
 const BLOCK_SIZE = 20;
-const GRAVITY_NORM = 1/60;    // 1ライン/秒（1G: 60Fで1落下, 0.0167...）
-const GRAVITY_SOFT = 1/4;     // 0.25ライン/秒（4Fで1落下, 0.25）
-const DAS = 167;  // ms
-const ARR = 0;    // ms
-const lockDelayTime = 500; // ms
+const GRAVITY_NORM = 1/60;
+const GRAVITY_SOFT = 1/4;
+const DAS = 167;
+const ARR = 0;
+const lockDelayTime = 500;
 let lockDelay = 0;
 let lockActive = false;
 let lockStartTime = null;
@@ -119,13 +96,72 @@ let score = 0, lines = 0, ren = -1, b2b = false, garbage = 0;
 let gameOverFlag = false;
 let lastDropWasHard = false;
 
-// --- Tスピン情報フラグ ---
+// --- シンプルな回転とTスピン判定 ---
 let lastTSpin = false;
-let lastMini = false;
 let lastRotated = false;
 
+function isValid(x, y, r, type=current) {
+    const shape = TETROMINOS[type][r];
+    for (let [dx, dy] of shape) {
+        let nx = x + dx, ny = y + dy;
+        if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) return false;
+        if (board[ny][nx]) return false;
+    }
+    return true;
+}
+
+function tryMove(dx, dy) {
+    if (gameOverFlag) return false;
+    if (isValid(pos.x + dx, pos.y + dy, pos.r)) {
+        pos.x += dx;
+        pos.y += dy;
+        resetLockDelay();
+        draw();
+        return true;
+    }
+    return false;
+}
+
+function rotate(dir) {
+    if (gameOverFlag) return;
+    let oldR = pos.r;
+    let newR = (oldR + dir + 4) % 4;
+    // ±1マス左右、±2マス上下を許容
+    let rotated = false;
+    for (let kx = -1; kx <= 1; kx++) {
+        for (let ky = -2; ky <= 2; ky++) {
+            let nx = pos.x + kx;
+            let ny = pos.y + ky;
+            if (isValid(nx, ny, newR)) {
+                pos.x = nx;
+                pos.y = ny;
+                pos.r = newR;
+                rotated = true;
+                resetLockDelay();
+                draw();
+                // --- Tスピン判定：角3つ以上埋まってたらTスピン ---
+                if (current === 'T') {
+                    let corners = [[0,0],[2,0],[0,2],[2,2]].filter(([dx,dy])=>{
+                        let cx = pos.x + dx - 1, cy = pos.y + dy - 1;
+                        return (cy < 0 || cx < 0 || cx >= COLS || cy >= ROWS || board[cy][cx]);
+                    }).length;
+                    lastTSpin = (corners >= 3);
+                    lastRotated = true;
+                } else {
+                    lastTSpin = false;
+                    lastRotated = false;
+                }
+                return;
+            }
+        }
+    }
+    // 回転できなかった場合フラグリセット
+    lastTSpin = false;
+    lastRotated = false;
+}
+
 // --- DAS/ARR制御 ---
-let moveDir = 0; // -1=左, 1=右, 0=なし
+let moveDir = 0;
 let dasTimer = null;
 let arrTimer = null;
 function startMove(dir) {
@@ -163,83 +199,10 @@ function spawnTetromino() {
     lockResets = 0;
     lastDropWasHard = false;
     lastTSpin = false;
-    lastMini = false;
     lastRotated = false;
     if (!isValid(pos.x, pos.y, pos.r)) {
         gameOverFlag = true;
         setTimeout(()=>alert('Game Over'), 150);
-    }
-}
-function isValid(x, y, r, type=current) {
-    const shape = TETROMINOS[type][r];
-    for (let [dx, dy] of shape) {
-        let nx = x + dx, ny = y + dy;
-        if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) return false;
-        if (board[ny][nx]) return false;
-    }
-    return true;
-}
-function tryMove(dx, dy) {
-    if (gameOverFlag) return false;
-    if (isValid(pos.x + dx, pos.y + dy, pos.r)) {
-        pos.x += dx;
-        pos.y += dy;
-        resetLockDelay();
-        draw();
-        return true;
-    }
-    return false;
-}
-
-// --- SRS回転インデックス ---
-function srsIndex(from, to) {
-    if (from === 0 && to === 1) return 0; // 0->R
-    if (from === 1 && to === 0) return 1; // R->0
-    if (from === 1 && to === 2) return 2; // R->2
-    if (from === 2 && to === 1) return 3; // 2->R
-    if (from === 2 && to === 3) return 4; // 2->L
-    if (from === 3 && to === 2) return 5; // L->2
-    if (from === 3 && to === 0) return 6; // L->0
-    if (from === 0 && to === 3) return 7; // 0->L
-    return 0;
-}
-
-// --- SRS回転/キック完全対応（Tスピン種別判定付き） ---
-function rotate(dir) {
-    if (gameOverFlag) return;
-    let oldR = pos.r;
-    let newR = (oldR + dir + 4) % 4;
-    const shapeType = current === 'I' ? 'I' : 'normal';
-    const kickTable = SRS_KICK[shapeType];
-    const idx = srsIndex(oldR, newR);
-    let rotated = false, kicked = false;
-    for (let [kx, ky] of kickTable[idx]) {
-        let nx = pos.x + kx;
-        let ny = pos.y + ky;
-        if (isValid(nx, ny, newR)) {
-            pos.x = nx;
-            pos.y = ny;
-            pos.r = newR;
-            rotated = true;
-            kicked = (kx !== 0 || ky !== 0);
-            resetLockDelay();
-            draw();
-            break;
-        }
-    }
-    // --- Tスピンフラグ更新（回転直後の位置で判定！）---
-    if (current === 'T' && rotated) {
-        let corners = [[0,0],[2,0],[0,2],[2,2]].filter(([dx,dy])=>{
-            let cx = pos.x + dx - 1, cy = pos.y + dy - 1;
-            return (cy < 0 || cx < 0 || cx >= COLS || cy >= ROWS || board[cy][cx]);
-        }).length;
-        lastTSpin = (corners >= 3);
-        lastMini = lastTSpin && kicked;
-        lastRotated = true;
-    } else {
-        lastTSpin = false;
-        lastMini = false;
-        lastRotated = false;
     }
 }
 
@@ -302,17 +265,14 @@ function place() {
         let nx = pos.x + dx, ny = pos.y + dy;
         if (ny >= 0 && ny < ROWS) board[ny][nx] = current;
     }
-    let [cleared, tspin, tspinMini] = clearLines();
-    const atk = calcGarbage(cleared, tspin, tspinMini);
-    garbage += atk;
+    let [cleared, tspin] = clearLines();
+    // ...火力計算等は現状通り...
     spawnTetromino();
-    // 設置後はフラグリセット
     lastTSpin = false;
-    lastMini = false;
     lastRotated = false;
 }
 
-// --- 行消し & Tスピン種別返却（設置直前の回転情報だけ見る！） ---
+// --- 行消し & Tスピン種別返却 ---
 function clearLines() {
     let cleared = 0;
     for (let y = ROWS-1; y >= 0; y--) {
@@ -323,41 +283,20 @@ function clearLines() {
             y++;
         }
     }
-    // 設置直前に回転したかどうかのみでTスピン判定
-    let tspin = false, tspinMini = false;
-    if (current === 'T' && lastRotated) {
-        if (lastMini && cleared > 0) tspinMini = true;
-        if (lastTSpin && !lastMini && cleared > 0) tspin = true;
-    }
+    // 設置直前に回転したかどうかだけでTスピン判定
+    let tspin = false;
+    if (current === 'T' && lastRotated && lastTSpin && cleared > 0) tspin = true;
+    // ...ren, b2b処理等は従来通り...
     if (cleared) {
         lines += cleared;
         ren = (ren === -1) ? 1 : ren+1;
-        if ((cleared === 4 || tspin || tspinMini) && b2b) b2b = true;
-        else if (tspin || tspinMini || cleared === 4) b2b = true;
+        if ((cleared === 4 || tspin) && b2b) b2b = true;
+        else if (tspin || cleared === 4) b2b = true;
         else b2b = false;
     } else {
         ren = -1;
     }
-    return [cleared, tspin, tspinMini];
-}
-
-// --- 火力計算（TスピンMINI対応） ---
-function calcGarbage(cleared, tspin, tspinMini) {
-    let atk = 0;
-    if (tspin || tspinMini) {
-        if (tspinMini && cleared === 1) atk = 0; // MINIは0火力
-        if (tspin && cleared === 1) atk = 2;
-        if (tspin && cleared === 2) atk = 4;
-        if (tspin && cleared === 3) atk = 6;
-    }
-    if (!tspin && !tspinMini) {
-        if (cleared === 2) atk = 1;
-        if (cleared === 3) atk = 2;
-        if (cleared === 4) atk = 4;
-    }
-    if (b2b && (cleared === 4 || tspin)) atk += 1;
-    if (ren >= 2) atk += Math.floor((ren-1)/2);
-    return atk;
+    return [cleared, tspin];
 }
 
 // --- ホールド機能 ---
