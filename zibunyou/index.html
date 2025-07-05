@@ -7,17 +7,10 @@
 </head>
 <body>
   <div id="container">
-    <canvas id="tetris" width="200" height="400"></canvas>
-    <div id="side">
-      <div id="hold-next">
-        <div>
-          <div id="hold-label">HOLD</div>
-          <canvas id="hold" width="80" height="80"></canvas>
-        </div>
-        <div>
-          <div id="next-label">NEXT</div>
-          <canvas id="next" width="80" height="320"></canvas>
-        </div>
+    <div id="leftbar">
+      <div>
+        <div id="next-label">NEXT</div>
+        <canvas id="next" width="80" height="320"></canvas>
       </div>
       <div id="info">
         <div id="score">SCORE: 0</div>
@@ -25,6 +18,11 @@
         <div id="ren">REN: 0</div>
         <div id="garbage">GARBAGE: 0</div>
       </div>
+    </div>
+    <canvas id="tetris" width="200" height="400"></canvas>
+    <div id="side">
+      <div id="hold-label">HOLD</div>
+      <canvas id="hold" width="80" height="80"></canvas>
     </div>
   </div>
   <script src="main.js"></script>

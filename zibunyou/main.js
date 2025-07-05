@@ -44,26 +44,27 @@ const TETROMINOS = {
         [[1,0],[0,1],[1,1],[1,2]],
     ],
 };
+// --- SRSキックテーブル（公式通り） ---
 const SRS_KICK = {
     normal: [
-        [[0,0],[-1,0],[-1,1],[0,-2],[-1,-2]],
-        [[0,0],[1,0],[1,-1],[0,2],[1,2]],
-        [[0,0],[1,0],[1,1],[0,-2],[1,-2]],
-        [[0,0],[-1,0],[-1,-1],[0,2],[-1,2]],
-        [[0,0],[1,0],[1,1],[0,-2],[1,-2]],
-        [[0,0],[-1,0],[-1,-1],[0,2],[-1,2]],
-        [[0,0],[-1,0],[-1,1],[0,-2],[-1,-2]],
-        [[0,0],[1,0],[1,-1],[0,2],[1,2]],
+        [[0,0],[-1,0],[-1,1],[0,-2],[-1,-2]], // 0>R
+        [[0,0],[1,0],[1,-1],[0,2],[1,2]],     // R>0
+        [[0,0],[1,0],[1,1],[0,-2],[1,-2]],    // R>2
+        [[0,0],[-1,0],[-1,-1],[0,2],[-1,2]],  // 2>R
+        [[0,0],[1,0],[1,1],[0,-2],[1,-2]],    // 2>L
+        [[0,0],[-1,0],[-1,-1],[0,2],[-1,2]],  // L>2
+        [[0,0],[-1,0],[-1,1],[0,-2],[-1,-2]], // L>0
+        [[0,0],[1,0],[1,-1],[0,2],[1,2]],     // 0>L
     ],
     I: [
-        [[0,0],[-2,0],[1,0],[-2,-1],[1,2]],
-        [[0,0],[2,0],[-1,0],[2,1],[-1,-2]],
-        [[0,0],[-1,0],[2,0],[-1,2],[2,-1]],
-        [[0,0],[1,0],[-2,0],[1,-2],[-2,1]],
-        [[0,0],[2,0],[-1,0],[2,1],[-1,-2]],
-        [[0,0],[-2,0],[1,0],[-2,-1],[1,2]],
-        [[0,0],[1,0],[-2,0],[1,-2],[-2,1]],
-        [[0,0],[-1,0],[2,0],[-1,2],[2,-1]],
+        [[0,0],[-2,0],[1,0],[-2,-1],[1,2]],   // 0>R
+        [[0,0],[2,0],[-1,0],[2,1],[-1,-2]],   // R>0
+        [[0,0],[-1,0],[2,0],[-1,2],[2,-1]],   // R>2
+        [[0,0],[1,0],[-2,0],[1,-2],[-2,1]],   // 2>R
+        [[0,0],[2,0],[-1,0],[2,1],[-1,-2]],   // 2>L
+        [[0,0],[-2,0],[1,0],[-2,-1],[1,2]],   // L>2
+        [[0,0],[1,0],[-2,0],[1,-2],[-2,1]],   // L>0
+        [[0,0],[-1,0],[2,0],[-1,2],[2,-1]],   // 0>L
     ]
 };
 // --- 七種一巡バッグ ---
@@ -89,8 +90,11 @@ function getNextTetromino() {
 const COLS = 10;
 const ROWS = 22;
 const BLOCK_SIZE = 20;
-const DAS = 167; // ms
-const ARR = 0;   // ms (0: instant repeat)
+// ぷよテト初期レベルに合わせて調整
+const GRAVITY_NORM = 1/60;    // 1ライン/秒（1G: 60Fで1落下, 0.0167...）
+const GRAVITY_SOFT = 1/4;     // 0.25ライン/秒（4Fで1落下, 0.25）
+const DAS = 167;  // ms
+const ARR = 0;    // ms
 const lockDelayTime = 500; // ms
 let lockDelay = 0;
 let lockActive = false;
@@ -175,15 +179,28 @@ function tryMove(dx, dy) {
     }
     return false;
 }
+// --- SRS回転 ---
+function srsIndex(from, to) {
+    // 0:0, R:1, 2:2, L:3
+    // return (from << 1 | (to - from + 4) % 4 === 1 ? 0 : 1) % 8;
+    // SRS公式順序
+    if (from === 0 && to === 1) return 0;
+    if (from === 1 && to === 0) return 1;
+    if (from === 1 && to === 2) return 2;
+    if (from === 2 && to === 1) return 3;
+    if (from === 2 && to === 3) return 4;
+    if (from === 3 && to === 2) return 5;
+    if (from === 3 && to === 0) return 6;
+    if (from === 0 && to === 3) return 7;
+    return 0;
+}
 function rotate(dir) {
     if (gameOverFlag) return;
     let oldR = pos.r;
     let newR = (oldR + dir + 4) % 4;
     const shapeType = current === 'I' ? 'I' : 'normal';
     const kickTable = SRS_KICK[shapeType];
-    let idx = (dir === 1)
-        ? (oldR * 2) % 8
-        : ((oldR * 2 + 7) % 8);
+    const idx = srsIndex(oldR, newR);
     for (let [kx, ky] of kickTable[idx]) {
         if (isValid(pos.x + kx, pos.y + ky, newR)) {
             pos.x += kx;
@@ -260,6 +277,7 @@ function place() {
 function clearLines() {
     let cleared = 0;
     let tspin = false;
+    // Tスピン判定
     if (current === 'T') {
         let corners = [[0,0],[2,0],[0,2],[2,2]].filter(([dx,dy])=>{
             let nx = pos.x + dx - 1, ny = pos.y + dy - 1;
@@ -285,7 +303,6 @@ function clearLines() {
     }
     return [cleared, tspin];
 }
-// --- 火力計算 ---
 function calcGarbage(cleared, tspin) {
     let atk = 0;
     if (tspin && cleared === 1) atk = 2;
@@ -350,15 +367,7 @@ function draw() {
             if (ny >= 0) drawBlock(mainCtx, nx, ny, current);
         }
     }
-    holdCtx.clearRect(0,0,holdCanvas.width,holdCanvas.height);
-    if (hold) {
-        const shape = TETROMINOS[hold][0];
-        let mx = Math.min(...shape.map(([x])=>x));
-        let my = Math.min(...shape.map(([_,y])=>y));
-        for (let [dx, dy] of shape) {
-            drawBlock(holdCtx, dx-mx, dy-my, hold, 20);
-        }
-    }
+    // NEXT欄: フィールド左上寄せ
     nextCtx.clearRect(0,0,nextCanvas.width,nextCanvas.height);
     for (let i=0; i<4; i++) {
         const nextType = queue[i];
@@ -370,6 +379,18 @@ function draw() {
             drawBlock(nextCtx, dx-mx, dy-my+i*2.1, nextType, 20);
         }
     }
+    // HOLD欄: そのまま
+    holdCtx.clearRect(0,0,holdCanvas.width,holdCanvas.height);
+    if (hold) {
+        const shape = TETROMINOS[hold][0];
+        let mx = Math.min(...shape.map(([x])=>x));
+        let my = Math.min(...shape.map(([_,y])=>y));
+        for (let [dx, dy] of shape) {
+            drawBlock(holdCtx, dx-mx, dy-my, hold, 20);
+        }
+    }
+    // INFO欄: フィールド左下寄せ
+    const info = document.getElementById('info');
     document.getElementById('score').textContent = "SCORE: " + score;
     document.getElementById('lines').textContent = "LINES: " + lines;
     document.getElementById('ren').textContent = "REN: " + (ren>=0?ren:0);
@@ -413,7 +434,7 @@ function update(now) {
     if (!lastTime) lastTime = now;
     let delta = now - lastTime;
     lastTime = now;
-    dropCounter += (softDrop ? 1/60*16 : 1/60*1.5) * delta;
+    dropCounter += (softDrop ? GRAVITY_SOFT : GRAVITY_NORM) * delta;
     if (dropCounter >= 1) {
         if (!tryMove(0, 1)) {
             checkLanding();
