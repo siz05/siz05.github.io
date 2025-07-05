@@ -2,176 +2,45 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>Pythonロジック風Tetris(JS移植)</title>
-  <style>
-    body {
-      background: #181C2A;
-      color: #fff;
-      font-family: 'Segoe UI', 'Meiryo', sans-serif;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-height: 100vh;
-    }
-    h1 {
-      margin-top: 24px;
-      margin-bottom: 8px;
-      font-size: 2em;
-      letter-spacing: 0.1em;
-    }
-    #info {
-      margin-bottom: 10px;
-      font-size: 1.1em;
-    }
-    .board-container {
-      display: flex;
-      flex-direction: row;
-      gap: 24px;
-      align-items: flex-start;
-      position:relative;
-    }
-    .sidepanel {
-      display: flex;
-      flex-direction: column;
-      align-items: stretch;
-      height: 420px;
-      min-width: 80px;
-      position: relative;
-    }
-    .sidepanel .label {
-      font-size: 0.97em;
-      margin-bottom: 2px;
-      color: #aaa;
-      text-align: left;
-      padding-left: 4px;
-      letter-spacing: 0.05em;
-    }
-    #hold-container {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      justify-content: flex-start;
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 80px;
-    }
-    #hold {
-      background: #222;
-      border: 2px solid #666;
-      border-radius: 6px;
-      margin-bottom: 4px;
-      margin-top: 2px;
-      margin-left: 2px;
-      box-shadow: 0 0 4px #0007;
-      display: block;
-    }
-    #stats {
-      position: absolute;
-      left: 0;
-      bottom: 0;
-      margin-left: 2px;
-      margin-bottom: 2px;
-      text-align: left;
-      font-size: 1.06em;
-      background: #222;
-      border-radius: 6px;
-      padding: 6px 12px;
-      box-shadow: 0 0 4px #0005;
-      width: 68px;
-      min-height: 70px;
-      color: #fff;
-    }
-    #tetris {
-      background: #0e101f;
-      border: 3px solid #444;
-      border-radius: 8px;
-      box-shadow: 0 0 10px #000a;
-      margin: 0 8px;
-      display: block;
-    }
-    #next-container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: flex-start;
-      min-width: 80px;
-      position: relative;
-      height: 420px;
-    }
-    #next-label {
-      font-size: 0.97em;
-      margin-bottom: 2px;
-      color: #aaa;
-      text-align: left;
-      width: 64px;
-      letter-spacing: 0.05em;
-      margin-left: 6px;
-    }
-    #next {
-      background: #222;
-      border: 2px solid #666;
-      border-radius: 6px;
-      margin-bottom: 6px;
-      margin-top: 2px;
-      margin-left: 2px;
-      box-shadow: 0 0 4px #0007;
-      display: block;
-    }
-    #footer {
-      margin-top: 32px;
-      color: #aaa;
-      font-size: 0.97em;
-      opacity: 0.85;
-    }
-    @media (max-width: 700px) {
-      .board-container {
-        flex-direction: column;
-        align-items: center;
-      }
-      #tetris {
-        margin: 0;
-      }
-      .sidepanel, #next-container {
-        height: auto;
-        position:static;
-      }
-      #stats {
-        position:static;
-        margin-top: 8px;
-      }
-      #hold-container {
-        position:static;
-        margin-bottom:8px;
-      }
-    }
-  </style>
+  <title>ぷよぷよテトリス風テトリス</title>
+  <meta name="viewport" content="width=480, initial-scale=1.0">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <h1>Pythonロジック風Tetris(JS移植)</h1>
-  <div id="info">
-    <span>←→:移動　↓:ソフトドロップ　↑:ハードドロップ　Z/X:回転　C:ホールド</span>
-  </div>
-  <div class="board-container">
-    <div class="sidepanel">
-      <div id="hold-container">
-        <div class="label">HOLD</div>
-        <canvas id="hold" width="64" height="64"></canvas>
+  <div id="wrapper">
+    <div id="hold-section">
+      <div class="section-title">HOLD</div>
+      <canvas id="hold" width="80" height="80"></canvas>
+    </div>
+    <div id="info-section">
+      <div>
+        <span>ライン:</span>
+        <span id="lines">0</span>
       </div>
-      <div id="stats">
-        <div id="score">Score: 0</div>
-        <div id="lines">Lines: 0</div>
-        <div id="ren">REN: 0</div>
+      <div>
+        <span>攻撃:</span>
+        <span id="attack">0</span>
+      </div>
+      <div>
+        <span>DPS:</span>
+        <span id="dps">0.00</span>
       </div>
     </div>
-    <canvas id="tetris" width="200" height="400"></canvas>
-    <div id="next-container">
-      <div id="next-label">NEXT</div>
-      <canvas id="next" width="64" height="160"></canvas>
+    <div id="next-section">
+      <div class="section-title">NEXT</div>
+      <div id="next-canvas-list">
+        <canvas class="next" width="80" height="80"></canvas>
+        <canvas class="next" width="80" height="80"></canvas>
+        <canvas class="next" width="80" height="80"></canvas>
+        <canvas class="next" width="80" height="80"></canvas>
+      </div>
+    </div>
+    <div id="game-section">
+      <canvas id="game" width="320" height="640"></canvas>
+      <div id="combo-label"></div>
+      <div id="clear-label"></div>
     </div>
   </div>
-  <script src="main.js"></script>
+  <script src="tetris.js"></script>
 </body>
 </html>
