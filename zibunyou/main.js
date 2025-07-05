@@ -90,7 +90,6 @@ function getNextTetromino() {
 const COLS = 10;
 const ROWS = 22;
 const BLOCK_SIZE = 20;
-// ぷよテト初期レベルに合わせて調整
 const GRAVITY_NORM = 1/60;    // 1ライン/秒（1G: 60Fで1落下, 0.0167...）
 const GRAVITY_SOFT = 1/4;     // 0.25ライン/秒（4Fで1落下, 0.25）
 const DAS = 167;  // ms
@@ -101,6 +100,7 @@ let lockActive = false;
 let lockStartTime = null;
 let lockResets = 0;
 const MAX_LOCK_RESETS = 15;
+
 // --- キャンバス/ボード ---
 const mainCanvas = document.getElementById('tetris');
 const mainCtx = mainCanvas.getContext('2d');
@@ -109,6 +109,7 @@ const holdCtx = holdCanvas.getContext('2d');
 const nextCanvas = document.getElementById('next');
 const nextCtx = nextCanvas.getContext('2d');
 let board = Array.from({length: ROWS}, () => Array(COLS).fill(0));
+
 // --- テトリミノ状態 ---
 let current = null;
 let hold = null;
@@ -117,6 +118,7 @@ let pos = {x: 3, y: 0, r: 0};
 let score = 0, lines = 0, ren = -1, b2b = false, garbage = 0;
 let gameOverFlag = false;
 let lastDropWasHard = false;
+
 // --- DAS/ARR制御 ---
 let moveDir = 0; // -1=左, 1=右, 0=なし
 let dasTimer = null;
@@ -144,6 +146,7 @@ function stopMove(dir) {
         if (arrTimer) clearInterval(arrTimer);
     }
 }
+
 // --- テトリミノ生成・セット ---
 function spawnTetromino() {
     current = getNextTetromino();
@@ -154,6 +157,7 @@ function spawnTetromino() {
     lockStartTime = null;
     lockResets = 0;
     lastDropWasHard = false;
+    lastSpinType = 0;
     if (!isValid(pos.x, pos.y, pos.r)) {
         gameOverFlag = true;
         setTimeout(()=>alert('Game Over'), 150);
@@ -179,21 +183,24 @@ function tryMove(dx, dy) {
     }
     return false;
 }
-// --- SRS回転 ---
+
+// --- SRS回転インデックス ---
 function srsIndex(from, to) {
-    // 0:0, R:1, 2:2, L:3
-    // return (from << 1 | (to - from + 4) % 4 === 1 ? 0 : 1) % 8;
-    // SRS公式順序
-    if (from === 0 && to === 1) return 0;
-    if (from === 1 && to === 0) return 1;
-    if (from === 1 && to === 2) return 2;
-    if (from === 2 && to === 1) return 3;
-    if (from === 2 && to === 3) return 4;
-    if (from === 3 && to === 2) return 5;
-    if (from === 3 && to === 0) return 6;
-    if (from === 0 && to === 3) return 7;
+    if (from === 0 && to === 1) return 0; // 0->R
+    if (from === 1 && to === 0) return 1; // R->0
+    if (from === 1 && to === 2) return 2; // R->2
+    if (from === 2 && to === 1) return 3; // 2->R
+    if (from === 2 && to === 3) return 4; // 2->L
+    if (from === 3 && to === 2) return 5; // L->2
+    if (from === 3 && to === 0) return 6; // L->0
+    if (from === 0 && to === 3) return 7; // 0->L
     return 0;
 }
+
+// --- Tスピン種別管理 ---
+let lastSpinType = 0; // 0=none, 1=mini, 2=normal
+
+// --- SRS回転/キック完全対応（Tスピン種別判定付き） ---
 function rotate(dir) {
     if (gameOverFlag) return;
     let oldR = pos.r;
@@ -201,17 +208,46 @@ function rotate(dir) {
     const shapeType = current === 'I' ? 'I' : 'normal';
     const kickTable = SRS_KICK[shapeType];
     const idx = srsIndex(oldR, newR);
-    for (let [kx, ky] of kickTable[idx]) {
-        if (isValid(pos.x + kx, pos.y + ky, newR)) {
-            pos.x += kx;
-            pos.y += ky;
+    let kicked = false;
+    let kickIndex = 0;
+    for (let i = 0; i < kickTable[idx].length; i++) {
+        let [kx, ky] = kickTable[idx][i];
+        let nx = pos.x + kx;
+        let ny = pos.y + ky;
+        if (isValid(nx, ny, newR)) {
+            pos.x = nx;
+            pos.y = ny;
             pos.r = newR;
+            kicked = (kx !== 0 || ky !== 0);
+            kickIndex = i;
             resetLockDelay();
             draw();
-            return;
+            break;
         }
     }
+    // Tスピン種別判定
+    if (current === 'T') {
+        // 角3つ以上
+        let corners = [[0,0],[2,0],[0,2],[2,2]].filter(([dx,dy])=>{
+            let nx = pos.x + dx - 1, ny = pos.y + dy - 1;
+            return (ny < 0 || nx < 0 || nx >= COLS || ny >= ROWS || board[ny][nx]);
+        }).length;
+        // MINI条件: kickedかつ、上2つ角のうち床側に面している数が2未満
+        // SRSでは回転方向によってMINIが無効になるパターンもあるが、ぷよテトではkickedならMINI
+        if (corners >= 3) {
+            if (kicked && (kickIndex > 0)) {
+                lastSpinType = 1; // MINI
+            } else {
+                lastSpinType = 2; // normal
+            }
+        } else {
+            lastSpinType = 0;
+        }
+    } else {
+        lastSpinType = 0;
+    }
 }
+
 // --- ロックディレイ判定 ---
 function checkLanding() {
     if (!isValid(pos.x, pos.y + 1, pos.r)) {
@@ -248,6 +284,7 @@ function resetLockDelay() {
     }
     lastDropWasHard = false;
 }
+
 // --- ソフト/ハードドロップ ---
 let softDrop = false;
 function handleSoftDrop(down) {
@@ -262,6 +299,7 @@ function hardDrop() {
     lastDropWasHard = true;
     place();
 }
+
 // --- ミノ設置 ---
 function place() {
     if (gameOverFlag) return;
@@ -269,22 +307,15 @@ function place() {
         let nx = pos.x + dx, ny = pos.y + dy;
         if (ny >= 0 && ny < ROWS) board[ny][nx] = current;
     }
-    let [cleared, tspin] = clearLines();
-    const atk = calcGarbage(cleared, tspin);
+    let [cleared, tspin, tspinMini] = clearLines();
+    const atk = calcGarbage(cleared, tspin, tspinMini);
     garbage += atk;
     spawnTetromino();
 }
+
+// --- 行消し & Tスピン種別返却 ---
 function clearLines() {
     let cleared = 0;
-    let tspin = false;
-    // Tスピン判定
-    if (current === 'T') {
-        let corners = [[0,0],[2,0],[0,2],[2,2]].filter(([dx,dy])=>{
-            let nx = pos.x + dx - 1, ny = pos.y + dy - 1;
-            return (ny < 0 || nx < 0 || nx >= COLS || ny >= ROWS || board[ny][nx]);
-        }).length;
-        if (corners >= 3) tspin = true;
-    }
     for (let y = ROWS-1; y >= 0; y--) {
         if (board[y].every(v => v)) {
             board.splice(y,1);
@@ -293,22 +324,34 @@ function clearLines() {
             y++;
         }
     }
+    // Tスピン種別返却
+    let tspin = false, tspinMini = false;
+    if (current === 'T') {
+        if (lastSpinType === 2 && cleared > 0) tspin = true;
+        if (lastSpinType === 1 && cleared > 0) tspinMini = true;
+    }
     if (cleared) {
         lines += cleared;
         ren = (ren === -1) ? 1 : ren+1;
-        if (cleared === 4 || tspin) b2b = true;
+        if ((cleared === 4 || tspin || tspinMini) && b2b) b2b = true;
+        else if (tspin || tspinMini || cleared === 4) b2b = true;
         else b2b = false;
     } else {
         ren = -1;
     }
-    return [cleared, tspin];
+    return [cleared, tspin, tspinMini];
 }
-function calcGarbage(cleared, tspin) {
+
+// --- 火力計算（TスピンMINI対応） ---
+function calcGarbage(cleared, tspin, tspinMini) {
     let atk = 0;
-    if (tspin && cleared === 1) atk = 2;
-    if (tspin && cleared === 2) atk = 4;
-    if (tspin && cleared === 3) atk = 6;
-    if (!tspin) {
+    if (tspin || tspinMini) {
+        if (tspinMini && cleared === 1) atk = 0; // MINIは0火力
+        if (tspin && cleared === 1) atk = 2;
+        if (tspin && cleared === 2) atk = 4;
+        if (tspin && cleared === 3) atk = 6;
+    }
+    if (!tspin && !tspinMini) {
         if (cleared === 2) atk = 1;
         if (cleared === 3) atk = 2;
         if (cleared === 4) atk = 4;
@@ -317,6 +360,7 @@ function calcGarbage(cleared, tspin) {
     if (ren >= 2) atk += Math.floor((ren-1)/2);
     return atk;
 }
+
 // --- ホールド機能 ---
 function holdTetromino() {
     if (!canHold || gameOverFlag) return;
@@ -335,6 +379,7 @@ function holdTetromino() {
     resetLockDelay();
     draw();
 }
+
 // --- 描画 ---
 function getColor(type) {
     return {
@@ -367,35 +412,42 @@ function draw() {
             if (ny >= 0) drawBlock(mainCtx, nx, ny, current);
         }
     }
-    // NEXT欄: フィールド左上寄せ
+    // HOLD欄（1マス余白で中央寄せ）
+    holdCtx.clearRect(0,0,holdCanvas.width,holdCanvas.height);
+    if (hold) {
+        const shape = TETROMINOS[hold][0];
+        let minX = Math.min(...shape.map(([x])=>x));
+        let minY = Math.min(...shape.map(([_,y])=>y));
+        let maxX = Math.max(...shape.map(([x])=>x));
+        let maxY = Math.max(...shape.map(([_,y])=>y));
+        let offsetX = Math.floor((4 - (maxX-minX+1))/2) + 1;
+        let offsetY = Math.floor((4 - (maxY-minY+1))/2) + 1;
+        for (let [dx, dy] of shape) {
+            drawBlock(holdCtx, dx-minX+offsetX, dy-minY+offsetY, hold, 16);
+        }
+    }
+    // NEXT欄（1マス余白＋縦余白）
     nextCtx.clearRect(0,0,nextCanvas.width,nextCanvas.height);
     for (let i=0; i<4; i++) {
         const nextType = queue[i];
         if (!nextType) continue;
         const shape = TETROMINOS[nextType][0];
-        let mx = Math.min(...shape.map(([x])=>x));
-        let my = Math.min(...shape.map(([_,y])=>y));
+        let minX = Math.min(...shape.map(([x])=>x));
+        let minY = Math.min(...shape.map(([_,y])=>y));
+        let maxX = Math.max(...shape.map(([x])=>x));
+        let maxY = Math.max(...shape.map(([_,y])=>y));
+        let offsetX = Math.floor((4 - (maxX-minX+1))/2) + 1;
+        let offsetY = Math.floor((4 - (maxY-minY+1))/2) + 1 + i*5;
         for (let [dx, dy] of shape) {
-            drawBlock(nextCtx, dx-mx, dy-my+i*2.1, nextType, 20);
+            drawBlock(nextCtx, dx-minX+offsetX, dy-minY+offsetY, nextType, 16);
         }
     }
-    // HOLD欄: そのまま
-    holdCtx.clearRect(0,0,holdCanvas.width,holdCanvas.height);
-    if (hold) {
-        const shape = TETROMINOS[hold][0];
-        let mx = Math.min(...shape.map(([x])=>x));
-        let my = Math.min(...shape.map(([_,y])=>y));
-        for (let [dx, dy] of shape) {
-            drawBlock(holdCtx, dx-mx, dy-my, hold, 20);
-        }
-    }
-    // INFO欄: フィールド左下寄せ
-    const info = document.getElementById('info');
     document.getElementById('score').textContent = "SCORE: " + score;
     document.getElementById('lines').textContent = "LINES: " + lines;
     document.getElementById('ren').textContent = "REN: " + (ren>=0?ren:0);
     document.getElementById('garbage').textContent = "GARBAGE: " + garbage;
 }
+
 // --- 入力 ---
 document.addEventListener('keydown', (e)=>{
     if (gameOverFlag) return;
@@ -426,6 +478,7 @@ document.addEventListener('keyup', (e)=>{
             handleSoftDrop(false); break;
     }
 });
+
 // --- ゲームループ ---
 let dropCounter = 0;
 let lastTime = null;
@@ -451,6 +504,7 @@ function update(now) {
     draw();
     requestAnimationFrame(update);
 }
+
 // --- 初期化 ---
 function init() {
     board = Array.from({length: ROWS}, () => Array(COLS).fill(0));
