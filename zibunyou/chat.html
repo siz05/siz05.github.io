@@ -1,148 +1,130 @@
 <!DOCTYPE html>
 <html lang="ja">
-<head>
-  <meta charset="UTF-8" />
-  <title>WebRTC Chat</title>
-  <!-- QR & 圧縮ライブラリ読み込み -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
-  <style>
-    body{font-family:sans-serif;margin:20px;}
-    .qr-container{display:flex;align-items:center;gap:10px;margin:1em 0;}
-    textarea{width:100%;height:4em;margin:0.5em 0;}
-    #chat{display:none;border-top:1px solid #ccc;padding-top:1em;}
-    #messages{height:150px;overflow-y:auto;border:1px solid #ddd;padding:0.5em;margin-bottom:0.5em;}
-  </style>
+<head><meta charset="UTF-8"><title>QR版WebRTCチャット</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+<style>
+  body{font-family:sans-serif;padding:1em}
+  .qr{display:flex;align-items:center;gap:1em;margin:.5em 0}
+  textarea{width:100%;height:4em;margin:.5em 0}
+  #chat{display:none;border-top:1px solid#ccc;margin-top:1em;padding-top:1em}
+</style>
 </head>
 <body>
-  <h1>WebRTC Chat</h1>
 
-  <h2>1. Offer 作成</h2>
-  <button id="create-offer">Offer を作成</button>
-  <div class="qr-container">
-    <div id="offer-qr"></div>
-    <button id="copy-offer">Offer をコピー</button>
-  </div>
-  <textarea id="remote-answer" placeholder="相手の 圧縮Answer をペースト"></textarea>
-  <button id="set-answer" disabled>Remote Answer 設定</button>
+<div id="setup">
+  <h1>準備画面</h1>
+  <button id="o">Offer→QR</button>
+  <div class="qr"><div id="qo"></div><button id="co">Copy</button></div>
+  <textarea id="ain" placeholder="Answer貼付"></textarea>
+  <button id="sa">Set Answer</button>
+  <hr>
+  <textarea id="oin" placeholder="Offer貼付"></textarea>
+  <button id="a">Answer→QR</button>
+  <div class="qr"><div id="qa"></div><button id="ca">Copy</button></div>
+</div>
 
-  <hr/>
+<div id="chat">
+  <div id="msg" style="border:1px solid#ccc;padding:.5em;height:100px;overflow:auto"></div>
+  <input id="in"><button id="s">send</button>
+</div>
 
-  <h2>2. Answer 作成</h2>
-  <textarea id="remote-offer" placeholder="相手の 圧縮Offer をペースト"></textarea>
-  <button id="gen-answer">Answer を作成</button>
-  <div class="qr-container">
-    <div id="answer-qr"></div>
-    <button id="copy-answer">Answer をコピー</button>
-  </div>
+<script>
+  const pc = new RTCPeerConnection({ iceServers:[{urls:'stun:stun.l.google.com:19302'}] });
+  let dc, csdp, asdp;
 
-  <hr/>
+  // QR描画
+  function qr(id, txt){
+    const el = document.getElementById(id);
+    el.innerHTML = '';
+    new QRCode(el, { text: txt, width:160, height:160 });
+  }
 
-  <div id="chat">
-    <h2>チャット</h2>
-    <div id="messages"></div>
-    <input id="msg" placeholder="メッセージ…" /><button id="send">送信</button>
-  </div>
-
-  <script>
-    // PeerConnection
-    const pc = new RTCPeerConnection({ iceServers:[{urls:"stun:stun.l.google.com:19302"}] });
-    let dc, offerCMP="", answerCMP="";
-
-    // QR生成
-    function genQR(id,txt){
-      const el=document.getElementById(id);
-      el.innerHTML="";
-      new QRCode(el,{text:txt,width:200,height:200});
-    }
-
-    // DataChannel セットアップ
-    function setupDC(channel){
-      channel.onopen = ()=>document.getElementById("chat").style.display="block";
-      channel.onmessage = e=>{
-        const d=document.createElement("div");
-        d.textContent="相手: "+e.data;
-        document.getElementById("messages").appendChild(d);
+  // ICE完了待ち
+  function waitIce(){
+    return new Promise(r=>{
+      if (pc.iceGatheringState==='complete') return r();
+      pc.onicegatheringstatechange = ()=>{
+        if (pc.iceGatheringState==='complete') r();
       };
-    }
+    });
+  }
 
-    // ICE Gathering 完了待ち
-    function waitIceComplete(pc){
-      return new Promise(res=>{
-        if(pc.iceGatheringState==="complete") return res();
-        function chk(){
-          if(pc.iceGatheringState==="complete"){
-            pc.removeEventListener("icegatheringstatechange",chk);
-            res();
-          }
-        }
-        pc.addEventListener("icegatheringstatechange",chk);
-      });
-    }
+  // 圧縮＋型付与／復元
+  function bake(s, t){ return t + ':' + LZString.compressToBase64(s) }
+  function unbake(x){
+    const [t, c] = x.split(':');
+    return { type: t, sdp: LZString.decompressFromBase64(c) };
+  }
 
-    // Offer 作成
-    document.getElementById("create-offer").onclick = async ()=>{
-      dc = pc.createDataChannel("chat"); setupDC(dc);
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      await waitIceComplete(pc);
+  // チャット画面表示
+  function showChat(){
+    document.getElementById('setup').style.display='none';
+    document.getElementById('chat').style.display='block';
+  }
 
-      // 圧縮
-      offerCMP = LZString.compressToEncodedURIComponent(
-        JSON.stringify(pc.localDescription)
-      );
-      genQR("offer-qr", offerCMP);
-      document.getElementById("set-answer").disabled = false;
+  // メッセージ受信／送信準備
+  function setupDC(channel){
+    dc = channel;
+    dc.onopen = showChat;
+    dc.onmessage = e=>{
+      const d = document.createElement('div');
+      d.textContent = '相: ' + e.data;
+      document.getElementById('msg').appendChild(d);
     };
+  }
 
-    // Remote Answer 設定
-    document.getElementById("set-answer").onclick = async ()=>{
-      const comp = document.getElementById("remote-answer").value.trim();
-      if(!comp) return alert("Answer をペーストして下さい");
-      const json = JSON.parse(
-        LZString.decompressFromEncodedURIComponent(comp)
-      );
-      await pc.setRemoteDescription(json);
-    };
+  // Offer側で作ったチャンネルをAnswer側も受け取る
+  pc.ondatachannel = e => setupDC(e.channel);
 
-    // Answer 作成
-    document.getElementById("gen-answer").onclick = async ()=>{
-      const comp = document.getElementById("remote-offer").value.trim();
-      if(!comp) return alert("Offer をペーストして下さい");
-      const jsonOffer = JSON.parse(
-        LZString.decompressFromEncodedURIComponent(comp)
-      );
-      await pc.setRemoteDescription(jsonOffer);
+  // Offer 作成（Offer側のみ createDataChannel）
+  document.getElementById('o').onclick = async ()=>{
+    // Offer 側チャンネル
+    setupDC(pc.createDataChannel('chat'));
 
-      pc.ondatachannel = e=>{ dc = e.channel; setupDC(dc); };
+    const o = await pc.createOffer();
+    await pc.setLocalDescription(o);
+    await waitIce();
 
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      await waitIceComplete(pc);
+    csdp = bake(pc.localDescription.sdp, 'offer');
+    qr('qo', csdp);
+    document.getElementById('co').onclick = ()=>navigator.clipboard.writeText(csdp);
+  };
 
-      // 圧縮
-      answerCMP = LZString.compressToEncodedURIComponent(
-        JSON.stringify(pc.localDescription)
-      );
-      genQR("answer-qr", answerCMP);
-    };
+  // リモート Answer 設定
+  document.getElementById('sa').onclick = async ()=>{
+    const v = document.getElementById('ain').value.trim();
+    if (!v) return;
+    const ans = unbake(v);
+    await pc.setRemoteDescription(ans);
+  };
 
-    // メッセージ送信
-    document.getElementById("send").onclick = ()=>{
-      const txt = document.getElementById("msg").value;
-      if(!txt||!dc||dc.readyState!=="open")return;
-      dc.send(txt);
-      const d=document.createElement("div");
-      d.textContent="あなた: "+txt;
-      document.getElementById("messages").appendChild(d);
-      document.getElementById("msg").value="";
-    };
+  // Answer 作成（Answer側はチャンネルを作らない）
+  document.getElementById('a').onclick = async ()=>{
+    const v = document.getElementById('oin').value.trim();
+    if (!v) return alert('Offerを貼ってください');
+    const of = unbake(v);
 
-    // コピー機能
-    document.getElementById("copy-offer").onclick =
-      ()=>navigator.clipboard.writeText(offerCMP).then(()=>alert("Copied"));
-    document.getElementById("copy-answer").onclick =
-      ()=>navigator.clipboard.writeText(answerCMP).then(()=>alert("Copied"));
-  </script>
+    await pc.setRemoteDescription(of);
+    const ans = await pc.createAnswer();
+    await pc.setLocalDescription(ans);
+    await waitIce();
+
+    asdp = bake(pc.localDescription.sdp, 'answer');
+    qr('qa', asdp);
+    document.getElementById('ca').onclick = ()=>navigator.clipboard.writeText(asdp);
+  };
+
+  // メッセージ送信
+  document.getElementById('s').onclick = ()=>{
+    const t = document.getElementById('in').value;
+    if (!dc || dc.readyState !== 'open' || !t) return;
+    dc.send(t);
+    const d = document.createElement('div');
+    d.textContent = '自: ' + t;
+    document.getElementById('msg').appendChild(d);
+    document.getElementById('in').value = '';
+  };
+</script>
 </body>
 </html>
