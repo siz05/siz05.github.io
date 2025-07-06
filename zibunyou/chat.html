@@ -1,120 +1,137 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebRTC DataChannel Chat</title>
-    <style>
-        body { font-family: Arial, sans-serif; }
-        #messages { margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px; }
-        .message { margin-bottom: 10px; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebRTC Chat with QR Code Signaling</title>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; }
+    #qrCode { margin: 20px 0; }
+    #messages { list-style-type: none; padding: 0; }
+    #messageInput { width: 100%; padding: 8px; }
+    #sendBtn { padding: 8px 16px; cursor: pointer; }
+  </style>
 </head>
 <body>
-    <h1>WebRTC DataChannel Chat</h1>
-    
-    <label for="name">あなたの名前:</label>
-    <input type="text" id="name" placeholder="名前を入力してください" />
-    
-    <textarea id="message" placeholder="メッセージを入力"></textarea>
-    <button id="send">送信</button>
 
-    <div id="messages"></div>
+  <h2>WebRTC Chat - No Signaling Server</h2>
+  
+  <div>
+    <h3>Send Message:</h3>
+    <textarea id="messageInput" placeholder="Type your message"></textarea><br>
+    <button id="sendBtn">Send Message</button>
+  </div>
+  
+  <div id="qrCode"></div>
 
-    <script>
-        let localConnection;
-        let remoteConnection;
-        let sendChannel;
-        let receiveChannel;
-        let dataChannel;
+  <div>
+    <h3>Received Messages:</h3>
+    <ul id="messages"></ul>
+  </div>
 
-        // 名前を取得
-        const nameInput = document.getElementById("name");
-        const messageInput = document.getElementById("message");
-        const sendButton = document.getElementById("send");
-        const messagesDiv = document.getElementById("messages");
+  <script>
+    let localConnection;
+    let remoteConnection;
+    let dataChannel;
 
-        sendButton.onclick = () => {
-            const name = nameInput.value.trim();
-            const message = messageInput.value.trim();
-            if (name && message && sendChannel && sendChannel.readyState === "open") {
-                const formattedMessage = `${name}: ${message}`;
-                sendChannel.send(formattedMessage);
-                displayMessage(formattedMessage, true);  // 送信者の画面に表示
-                messageInput.value = '';  // メッセージを送信後に入力欄をクリア
-            }
+    // Create the local peer connection
+    function createOffer() {
+      localConnection = new RTCPeerConnection();
+
+      // Set up the data channel
+      dataChannel = localConnection.createDataChannel("chat");
+
+      dataChannel.onmessage = function(event) {
+        const li = document.createElement("li");
+        li.textContent = `Message from peer: ${event.data}`;
+        document.getElementById("messages").appendChild(li);
+      };
+
+      // Create an offer
+      localConnection.createOffer().then((offer) => {
+        return localConnection.setLocalDescription(offer);
+      }).then(() => {
+        const offerText = JSON.stringify(localConnection.localDescription);
+        generateQRCode(offerText);
+      }).catch((error) => {
+        console.error('Error creating offer:', error);
+      });
+    }
+
+    // Generate a QR code from a given string
+    function generateQRCode(data) {
+      QRCode.toCanvas(document.getElementById("qrCode"), data, function (error) {
+        if (error) console.error(error);
+      });
+    }
+
+    // Read QR code data from the other peer
+    function handleQRData(data) {
+      const description = JSON.parse(data);
+      remoteConnection = new RTCPeerConnection();
+
+      remoteConnection.ondatachannel = function(event) {
+        const receiveChannel = event.channel;
+        receiveChannel.onmessage = function(event) {
+          const li = document.createElement("li");
+          li.textContent = `Message from peer: ${event.data}`;
+          document.getElementById("messages").appendChild(li);
         };
+      };
 
-        function displayMessage(message, isSender = false) {
-            // メッセージを表示
-            const messageDiv = document.createElement("div");
-            messageDiv.className = "message";
-            messageDiv.textContent = message;
-            messagesDiv.appendChild(messageDiv);
+      remoteConnection.setRemoteDescription(description).then(() => {
+        return remoteConnection.createAnswer();
+      }).then((answer) => {
+        return remoteConnection.setLocalDescription(answer);
+      }).then(() => {
+        const answerText = JSON.stringify(remoteConnection.localDescription);
+        generateQRCode(answerText);
+      }).catch((error) => {
+        console.error('Error handling remote offer or generating answer:', error);
+      });
+    }
 
-            if (isSender) {
-                console.log("Message sent: " + message);
-            } else {
-                console.log("Message received: " + message);
-            }
-        }
+    // Handle ICE candidates
+    function handleIceCandidate(event) {
+      if (event.candidate) {
+        const candidate = JSON.stringify(event.candidate);
+        generateQRCode(candidate);
+      }
+    }
 
-        // WebRTCの接続設定
-        function createConnection() {
-            localConnection = new RTCPeerConnection();
-            remoteConnection = new RTCPeerConnection();
+    // Listen for ICE candidates from local connection
+    localConnection.onicecandidate = handleIceCandidate;
 
-            // 受信データチャネルを設定
-            remoteConnection.ondatachannel = (event) => {
-                receiveChannel = event.channel;
-                receiveChannel.onmessage = (event) => {
-                    displayMessage(event.data);  // 受信者の画面にメッセージ表示
-                };
-            };
+    // Handle incoming ICE candidates from remote peer
+    function handleIncomingCandidate(data) {
+      const candidate = new RTCIceCandidate(JSON.parse(data));
+      remoteConnection.addIceCandidate(candidate).catch((error) => {
+        console.error('Error adding received ICE candidate:', error);
+      });
+    }
 
-            // 送信データチャネルを設定
-            sendChannel = localConnection.createDataChannel("chat");
-            sendChannel.onopen = () => console.log("Send channel opened");
-            sendChannel.onclose = () => console.log("Send channel closed");
+    // Handle send button click
+    document.getElementById("sendBtn").onclick = function() {
+      const message = document.getElementById("messageInput").value;
+      if (message && dataChannel) {
+        dataChannel.send(message);
+        const li = document.createElement("li");
+        li.textContent = `You: ${message}`;
+        document.getElementById("messages").appendChild(li);
+        document.getElementById("messageInput").value = '';
+      }
+    };
 
-            // ICE候補を交換
-            localConnection.onicecandidate = (event) => {
-                if (event.candidate) {
-                    remoteConnection.addIceCandidate(event.candidate)
-                        .catch(e => console.error("Error adding ICE candidate", e));
-                }
-            };
-            remoteConnection.onicecandidate = (event) => {
-                if (event.candidate) {
-                    localConnection.addIceCandidate(event.candidate)
-                        .catch(e => console.error("Error adding ICE candidate", e));
-                }
-            };
+    // Start the process by generating the initial offer or waiting for a QR code scan
+    if (window.location.hash === "#offer") {
+      createOffer();  // Client A creates an offer
+    } else {
+      const qrCodeData = prompt("Scan QR code from the other peer or paste the offer here:");
+      handleQRData(qrCodeData);  // Client B reads the offer
+    }
 
-            // シグナリングの代わりに、offerとanswerを手動で交換
-            localConnection.createOffer()
-                .then(offer => {
-                    return localConnection.setLocalDescription(offer);
-                })
-                .then(() => {
-                    return remoteConnection.setRemoteDescription(localConnection.localDescription);
-                })
-                .then(() => {
-                    return remoteConnection.createAnswer();
-                })
-                .then(answer => {
-                    return remoteConnection.setLocalDescription(answer);
-                })
-                .then(() => {
-                    return localConnection.setRemoteDescription(remoteConnection.localDescription);
-                })
-                .catch(e => console.error("Error in connection setup", e));
-        }
+  </script>
 
-        // ページロード時に接続を初期化
-        window.onload = () => {
-            createConnection();
-        };
-    </script>
 </body>
 </html>
