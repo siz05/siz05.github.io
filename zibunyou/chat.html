@@ -23,7 +23,10 @@
     <button id="sendBtn">Send Message</button>
   </div>
   
-  <div id="qrCode"></div>
+  <div>
+    <h3>QR Code will appear here:</h3>
+    <canvas id="qrCode"></canvas>
+  </div>
 
   <div>
     <h3>Received Messages:</h3>
@@ -61,12 +64,33 @@
 
     // Generate a QR code from a given string
     function generateQRCode(data) {
-      QRCode.toCanvas(document.getElementById("qrCode"), data, function (error) {
-        if (error) console.error(error);
-      });
+      if (!data) {
+        console.error('No data provided for QR code');
+        return;
+      }
+
+      const canvasElement = document.getElementById("qrCode");
+
+      if (!canvasElement) {
+        console.error('Canvas element with id "qrCode" not found!');
+        return;
+      }
+
+      try {
+        // QRコードをcanvasに描画
+        QRCode.toCanvas(canvasElement, data, function (error) {
+          if (error) {
+            console.error('Error generating QR code:', error);
+          } else {
+            console.log('QR code generated successfully');
+          }
+        });
+      } catch (error) {
+        console.error('Error in generateQRCode function:', error);
+      }
     }
 
-    // Read QR code data from the other peer
+    // Handle QR data received from another peer
     function handleQRData(data) {
       const description = JSON.parse(data);
       remoteConnection = new RTCPeerConnection();
@@ -89,25 +113,6 @@
         generateQRCode(answerText);
       }).catch((error) => {
         console.error('Error handling remote offer or generating answer:', error);
-      });
-    }
-
-    // Handle ICE candidates
-    function handleIceCandidate(event) {
-      if (event.candidate) {
-        const candidate = JSON.stringify(event.candidate);
-        generateQRCode(candidate);
-      }
-    }
-
-    // Listen for ICE candidates from local connection
-    localConnection.onicecandidate = handleIceCandidate;
-
-    // Handle incoming ICE candidates from remote peer
-    function handleIncomingCandidate(data) {
-      const candidate = new RTCIceCandidate(JSON.parse(data));
-      remoteConnection.addIceCandidate(candidate).catch((error) => {
-        console.error('Error adding received ICE candidate:', error);
       });
     }
 
