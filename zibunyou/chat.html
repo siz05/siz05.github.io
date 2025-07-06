@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC DataChannel Chat</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        #messages { margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px; }
+        .message { margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <h1>WebRTC DataChannel Chat</h1>
+    
+    <label for="name">あなたの名前:</label>
+    <input type="text" id="name" placeholder="名前を入力してください" />
+    
+    <textarea id="message" placeholder="メッセージを入力"></textarea>
+    <button id="send">送信</button>
+
+    <div id="messages"></div>
+
+    <script>
+        let localConnection;
+        let remoteConnection;
+        let sendChannel;
+        let receiveChannel;
+        let dataChannel;
+
+        // 名前を取得
+        const nameInput = document.getElementById("name");
+        const messageInput = document.getElementById("message");
+        const sendButton = document.getElementById("send");
+        const messagesDiv = document.getElementById("messages");
+
+        sendButton.onclick = () => {
+            const name = nameInput.value.trim();
+            const message = messageInput.value.trim();
+            if (name && message && sendChannel) {
+                const formattedMessage = `${name}: ${message}`;
+                sendChannel.send(formattedMessage);
+                displayMessage(formattedMessage);
+                messageInput.value = '';  // メッセージを送信後に入力欄をクリア
+            }
+        };
+
+        function displayMessage(message) {
+            const messageDiv = document.createElement("div");
+            messageDiv.className = "message";
+            messageDiv.textContent = message;
+            messagesDiv.appendChild(messageDiv);
+        }
+
+        // WebRTCの接続設定
+        function createConnection() {
+            localConnection = new RTCPeerConnection();
+            remoteConnection = new RTCPeerConnection();
+
+            // 受信データチャネルを設定
+            remoteConnection.ondatachannel = (event) => {
+                receiveChannel = event.channel;
+                receiveChannel.onmessage = (event) => {
+                    displayMessage(event.data);
+                };
+            };
+
+            // 送信データチャネルを設定
+            sendChannel = localConnection.createDataChannel("chat");
+            sendChannel.onopen = () => console.log("Send channel opened");
+            sendChannel.onclose = () => console.log("Send channel closed");
+
+            // ICE候補を交換
+            localConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    remoteConnection.addIceCandidate(event.candidate)
+                        .catch(e => console.error("Error adding ICE candidate", e));
+                }
+            };
+            remoteConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    localConnection.addIceCandidate(event.candidate)
+                        .catch(e => console.error("Error adding ICE candidate", e));
+                }
+            };
+
+            // シグナリングの代わりに、offerとanswerを手動で交換
+            localConnection.createOffer()
+                .then(offer => {
+                    return localConnection.setLocalDescription(offer);
+                })
+                .then(() => {
+                    return remoteConnection.setRemoteDescription(localConnection.localDescription);
+                })
+                .then(() => {
+                    return remoteConnection.createAnswer();
+                })
+                .then(answer => {
+                    return remoteConnection.setLocalDescription(answer);
+                })
+                .then(() => {
+                    return localConnection.setRemoteDescription(remoteConnection.localDescription);
+                })
+                .catch(e => console.error("Error in connection setup", e));
+        }
+
+        // ページロード時に接続を初期化
+        window.onload = () => {
+            createConnection();
+        };
+    </script>
+</body>
+</html>
