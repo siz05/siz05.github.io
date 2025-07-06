@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WebRTC Chat with QR Code Signaling</title>
+  <title>WebRTC チャット（QRコードで接続）</title>
+  <!-- QRコード生成用のライブラリ -->
   <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
   <style>
     body { font-family: Arial, sans-serif; }
@@ -15,21 +16,21 @@
 </head>
 <body>
 
-  <h2>WebRTC Chat - No Signaling Server</h2>
+  <h2>WebRTC チャット - シグナリングサーバーなし</h2>
   
   <div>
-    <h3>Send Message:</h3>
-    <textarea id="messageInput" placeholder="Type your message"></textarea><br>
-    <button id="sendBtn">Send Message</button>
+    <h3>メッセージを送信:</h3>
+    <textarea id="messageInput" placeholder="メッセージを入力"></textarea><br>
+    <button id="sendBtn">メッセージ送信</button>
   </div>
   
   <div>
-    <h3>QR Code will appear here:</h3>
-    <canvas id="qrCode"></canvas>
+    <h3>QRコードがここに表示されます:</h3>
+    <canvas id="qrCode"></canvas> <!-- QRコード表示用のキャンバス -->
   </div>
 
   <div>
-    <h3>Received Messages:</h3>
+    <h3>受信したメッセージ:</h3>
     <ul id="messages"></ul>
   </div>
 
@@ -38,104 +39,129 @@
     let remoteConnection;
     let dataChannel;
 
-    // Create the local peer connection
+    // オファーを作成する関数（送信者側）
     function createOffer() {
       localConnection = new RTCPeerConnection();
 
-      // Set up the data channel
+      // データチャネルを作成
       dataChannel = localConnection.createDataChannel("chat");
 
+      // メッセージ受信時のイベント
       dataChannel.onmessage = function(event) {
         const li = document.createElement("li");
-        li.textContent = `Message from peer: ${event.data}`;
+        li.textContent = `相手からのメッセージ: ${event.data}`;
         document.getElementById("messages").appendChild(li);
       };
 
-      // Create an offer
+      // オファーを作成し、ローカルの接続に設定
       localConnection.createOffer().then((offer) => {
         return localConnection.setLocalDescription(offer);
       }).then(() => {
+        // オファーをQRコードとして生成
         const offerText = JSON.stringify(localConnection.localDescription);
         generateQRCode(offerText);
       }).catch((error) => {
-        console.error('Error creating offer:', error);
+        console.error('オファー作成中にエラーが発生しました:', error);
       });
     }
 
-    // Generate a QR code from a given string
+    // QRコードを生成する関数
     function generateQRCode(data) {
       if (!data) {
-        console.error('No data provided for QR code');
+        console.error('QRコードにデータがありません');
         return;
       }
 
       const canvasElement = document.getElementById("qrCode");
 
       if (!canvasElement) {
-        console.error('Canvas element with id "qrCode" not found!');
+        console.error('キャンバス要素が見つかりません。');
         return;
       }
 
       try {
-        // QRコードをcanvasに描画
+        // QRコードをキャンバスに描画
         QRCode.toCanvas(canvasElement, data, function (error) {
           if (error) {
-            console.error('Error generating QR code:', error);
+            console.error('QRコード生成時にエラーが発生しました:', error);
           } else {
-            console.log('QR code generated successfully');
+            console.log('QRコードの生成に成功しました');
           }
         });
       } catch (error) {
-        console.error('Error in generateQRCode function:', error);
+        console.error('QRコード生成中にエラーが発生しました:', error);
       }
     }
 
-    // Handle QR data received from another peer
+    // QRコードデータを受け取って処理する関数
     function handleQRData(data) {
-      const description = JSON.parse(data);
-      remoteConnection = new RTCPeerConnection();
+      try {
+        // 受け取ったデータをJSONに変換して、オファーの内容を設定
+        const description = JSON.parse(data);
+        remoteConnection = new RTCPeerConnection();
 
-      remoteConnection.ondatachannel = function(event) {
-        const receiveChannel = event.channel;
-        receiveChannel.onmessage = function(event) {
-          const li = document.createElement("li");
-          li.textContent = `Message from peer: ${event.data}`;
-          document.getElementById("messages").appendChild(li);
+        // データチャネルを受信
+        remoteConnection.ondatachannel = function(event) {
+          const receiveChannel = event.channel;
+          receiveChannel.onmessage = function(event) {
+            const li = document.createElement("li");
+            li.textContent = `相手からのメッセージ: ${event.data}`;
+            document.getElementById("messages").appendChild(li);
+          };
         };
-      };
 
-      remoteConnection.setRemoteDescription(description).then(() => {
-        return remoteConnection.createAnswer();
-      }).then((answer) => {
-        return remoteConnection.setLocalDescription(answer);
-      }).then(() => {
-        const answerText = JSON.stringify(remoteConnection.localDescription);
-        generateQRCode(answerText);
-      }).catch((error) => {
-        console.error('Error handling remote offer or generating answer:', error);
-      });
+        // リモートの接続設定
+        remoteConnection.setRemoteDescription(description).then(() => {
+          return remoteConnection.createAnswer();
+        }).then((answer) => {
+          return remoteConnection.setLocalDescription(answer);
+        }).then(() => {
+          // アンサーをQRコードとして生成
+          const answerText = JSON.stringify(remoteConnection.localDescription);
+          generateQRCode(answerText);
+        }).catch((error) => {
+          console.error('オファーの処理中にエラーが発生しました:', error);
+        });
+
+      } catch (error) {
+        alert('QRコードが無効です。正しいオファー情報を入力してください。');
+        console.error('QRコードデータの処理中にエラーが発生しました:', error);
+      }
     }
 
-    // Handle send button click
+    // メッセージ送信ボタンがクリックされたときの処理
     document.getElementById("sendBtn").onclick = function() {
       const message = document.getElementById("messageInput").value;
       if (message && dataChannel) {
-        dataChannel.send(message);
+        dataChannel.send(message);  // データチャネル経由でメッセージ送信
         const li = document.createElement("li");
-        li.textContent = `You: ${message}`;
-        document.getElementById("messages").appendChild(li);
-        document.getElementById("messageInput").value = '';
+        li.textContent = `あなた: ${message}`;
+        document.getElementById("messages").appendChild(li);  // 画面に表示
+        document.getElementById("messageInput").value = '';  // 入力フィールドを空にする
       }
     };
 
-    // Start the process by generating the initial offer or waiting for a QR code scan
-    if (window.location.hash === "#offer") {
-      createOffer();  // Client A creates an offer
-    } else {
-      const qrCodeData = prompt("Scan QR code from the other peer or paste the offer here:");
-      handleQRData(qrCodeData);  // Client B reads the offer
+    // 接続が成功した場合にログを表示
+    function logConnectionSuccess() {
+      console.log("接続が確立しました。オファー側のログです。");
     }
 
+    // ページが読み込まれた際の動作
+    if (window.location.hash === "#offer") {
+      // クライアントA（オファー側）がオファーを作成
+      createOffer();
+    } else {
+      // クライアントB（受信者側）はQRコードを入力する
+      const qrCodeData = prompt("他のピアからQRコードをスキャンするか、オファーをここに貼り付けてください:");
+      if (qrCodeData) {
+        handleQRData(qrCodeData);  // クライアントBがオファーを処理
+      }
+    }
+
+    // クライアントA（オファー側）が接続成功した場合のコールバック
+    if (remoteConnection && remoteConnection.iceConnectionState === "connected") {
+      logConnectionSuccess();
+    }
   </script>
 
 </body>
