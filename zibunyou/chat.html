@@ -46,11 +46,24 @@
       // データチャネルを作成
       dataChannel = localConnection.createDataChannel("chat");
 
+      // データチャネルが開いたときにメッセージ送信を許可
+      dataChannel.onopen = function() {
+        alert("データチャネルが開きました。メッセージ送信可能です。");
+      };
+
       // メッセージ受信時のイベント
       dataChannel.onmessage = function(event) {
         const li = document.createElement("li");
         li.textContent = `相手からのメッセージ: ${event.data}`;
         document.getElementById("messages").appendChild(li);
+      };
+
+      // ICE候補が発見されたときの処理
+      localConnection.onicecandidate = function(event) {
+        if (event.candidate) {
+          // 自分のICE候補を相手に送信（QRコードで）
+          sendCandidate(event.candidate);
+        }
       };
 
       // オファーを作成し、ローカルの接続に設定
@@ -61,21 +74,29 @@
         const offerText = JSON.stringify(localConnection.localDescription);
         generateQRCode(offerText);
       }).catch((error) => {
-        console.error('オファー作成中にエラーが発生しました:', error);
+        alert('オファー作成中にエラーが発生しました: ' + error);
       });
+    }
+
+    // ICE候補を送信する関数
+    function sendCandidate(candidate) {
+      // ここでQRコードなどを利用して相手に送信するロジックを実装
+      const candidateText = JSON.stringify(candidate);
+      alert("ICE候補を送信: " + candidateText);
+      // QRコードで送る場合は、ここで生成して送信
     }
 
     // QRコードを生成する関数
     function generateQRCode(data) {
       if (!data) {
-        console.error('QRコードにデータがありません');
+        alert('QRコードにデータがありません');
         return;
       }
 
       const canvasElement = document.getElementById("qrCode");
 
       if (!canvasElement) {
-        console.error('キャンバス要素が見つかりません。');
+        alert('キャンバス要素が見つかりません。');
         return;
       }
 
@@ -83,13 +104,13 @@
         // QRコードをキャンバスに描画
         QRCode.toCanvas(canvasElement, data, function (error) {
           if (error) {
-            console.error('QRコード生成時にエラーが発生しました:', error);
+            alert('QRコード生成時にエラーが発生しました: ' + error);
           } else {
-            console.log('QRコードの生成に成功しました');
+            alert('QRコードの生成に成功しました');
           }
         });
       } catch (error) {
-        console.error('QRコード生成中にエラーが発生しました:', error);
+        alert('QRコード生成中にエラーが発生しました: ' + error);
       }
     }
 
@@ -110,6 +131,14 @@
           };
         };
 
+        // ICE候補が発見されたときの処理
+        remoteConnection.onicecandidate = function(event) {
+          if (event.candidate) {
+            // 相手のICE候補を自分に設定
+            sendCandidate(event.candidate);
+          }
+        };
+
         // リモートの接続設定
         remoteConnection.setRemoteDescription(description).then(() => {
           return remoteConnection.createAnswer();
@@ -120,30 +149,32 @@
           const answerText = JSON.stringify(remoteConnection.localDescription);
           generateQRCode(answerText);
         }).catch((error) => {
-          console.error('オファーの処理中にエラーが発生しました:', error);
+          alert('オファーの処理中にエラーが発生しました: ' + error);
         });
 
       } catch (error) {
         alert('QRコードが無効です。正しいオファー情報を入力してください。');
-        console.error('QRコードデータの処理中にエラーが発生しました:', error);
+        alert('QRコードデータの処理中にエラーが発生しました: ' + error);
       }
     }
 
     // メッセージ送信ボタンがクリックされたときの処理
     document.getElementById("sendBtn").onclick = function() {
       const message = document.getElementById("messageInput").value;
-      if (message && dataChannel) {
+      if (message && dataChannel && dataChannel.readyState === "open") {
         dataChannel.send(message);  // データチャネル経由でメッセージ送信
         const li = document.createElement("li");
         li.textContent = `あなた: ${message}`;
         document.getElementById("messages").appendChild(li);  // 画面に表示
         document.getElementById("messageInput").value = '';  // 入力フィールドを空にする
+      } else {
+        alert('データチャネルが開いていません。メッセージを送信できません。');
       }
     };
 
     // 接続が成功した場合にログを表示
     function logConnectionSuccess() {
-      console.log("接続が確立しました。オファー側のログです。");
+      alert("接続が確立しました。オファー側のログです。");
     }
 
     // ページが読み込まれた際の動作
