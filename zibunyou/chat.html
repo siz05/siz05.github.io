@@ -37,19 +37,26 @@
         sendButton.onclick = () => {
             const name = nameInput.value.trim();
             const message = messageInput.value.trim();
-            if (name && message && sendChannel) {
+            if (name && message && sendChannel && sendChannel.readyState === "open") {
                 const formattedMessage = `${name}: ${message}`;
                 sendChannel.send(formattedMessage);
-                displayMessage(formattedMessage);
+                displayMessage(formattedMessage, true);  // 送信者の画面に表示
                 messageInput.value = '';  // メッセージを送信後に入力欄をクリア
             }
         };
 
-        function displayMessage(message) {
+        function displayMessage(message, isSender = false) {
+            // メッセージを表示
             const messageDiv = document.createElement("div");
             messageDiv.className = "message";
             messageDiv.textContent = message;
             messagesDiv.appendChild(messageDiv);
+
+            if (isSender) {
+                console.log("Message sent: " + message);
+            } else {
+                console.log("Message received: " + message);
+            }
         }
 
         // WebRTCの接続設定
@@ -61,7 +68,7 @@
             remoteConnection.ondatachannel = (event) => {
                 receiveChannel = event.channel;
                 receiveChannel.onmessage = (event) => {
-                    displayMessage(event.data);
+                    displayMessage(event.data);  // 受信者の画面にメッセージ表示
                 };
             };
 
