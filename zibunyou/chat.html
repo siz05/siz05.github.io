@@ -2,20 +2,20 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>WebRTC Chat (ICE完了待ち版)</title>
+  <title>WebRTC Chat</title>
+  <!-- QR & 圧縮ライブラリ読み込み -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
   <style>
-    body { font-family: sans-serif; margin: 20px; }
-    h2 { margin-bottom: 0.2em; }
-    textarea { width: 100%; height: 4em; margin-bottom: 0.5em; }
-    .qr-container { display: flex; align-items: center; gap: 10px; margin: 1em 0; }
-    #chat { border-top: 1px solid #ccc; padding-top: 1em; display: none; }
-    #messages { height: 150px; overflow-y: auto; border: 1px solid #ddd; padding: 0.5em; margin-bottom: 0.5em; }
-    input, button { padding: 0.5em; }
+    body{font-family:sans-serif;margin:20px;}
+    .qr-container{display:flex;align-items:center;gap:10px;margin:1em 0;}
+    textarea{width:100%;height:4em;margin:0.5em 0;}
+    #chat{display:none;border-top:1px solid #ccc;padding-top:1em;}
+    #messages{height:150px;overflow-y:auto;border:1px solid #ddd;padding:0.5em;margin-bottom:0.5em;}
   </style>
 </head>
 <body>
-  <h1>WebRTC チャット（ICE完了待ち対応）</h1>
+  <h1>WebRTC Chat</h1>
 
   <h2>1. Offer 作成</h2>
   <button id="create-offer">Offer を作成</button>
@@ -23,14 +23,14 @@
     <div id="offer-qr"></div>
     <button id="copy-offer">Offer をコピー</button>
   </div>
-  <textarea id="remote-answer-sdp" placeholder="相手の Answer SDP をペースト"></textarea>
-  <button id="set-remote-answer" disabled>Remote Answer を設定</button>
+  <textarea id="remote-answer" placeholder="相手の 圧縮Answer をペースト"></textarea>
+  <button id="set-answer" disabled>Remote Answer 設定</button>
 
   <hr/>
 
   <h2>2. Answer 作成</h2>
-  <textarea id="remote-offer-sdp" placeholder="相手の Offer SDP をペースト"></textarea>
-  <button id="generate-answer">Answer を作成</button>
+  <textarea id="remote-offer" placeholder="相手の 圧縮Offer をペースト"></textarea>
+  <button id="gen-answer">Answer を作成</button>
   <div class="qr-container">
     <div id="answer-qr"></div>
     <button id="copy-answer">Answer をコピー</button>
@@ -41,110 +41,108 @@
   <div id="chat">
     <h2>チャット</h2>
     <div id="messages"></div>
-    <input id="message-input" placeholder="メッセージ入力…" />
-    <button id="send">送信</button>
+    <input id="msg" placeholder="メッセージ…" /><button id="send">送信</button>
   </div>
 
   <script>
-    const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
-    let dataChannel, currentOfferSDP = "", currentAnswerSDP = "";
+    // PeerConnection
+    const pc = new RTCPeerConnection({ iceServers:[{urls:"stun:stun.l.google.com:19302"}] });
+    let dc, offerCMP="", answerCMP="";
 
-    // ICE完了を待つ関数
-    function waitIceGatheringComplete(pc) {
-      return new Promise(resolve => {
-        if (pc.iceGatheringState === "complete") return resolve();
-        const check = () => {
-          if (pc.iceGatheringState === "complete") {
-            pc.removeEventListener("icegatheringstatechange", check);
-            resolve();
-          }
-        };
-        pc.addEventListener("icegatheringstatechange", check);
-      });
+    // QR生成
+    function genQR(id,txt){
+      const el=document.getElementById(id);
+      el.innerHTML="";
+      new QRCode(el,{text:txt,width:200,height:200});
     }
 
-    function genQR(elId, text) {
-      document.getElementById(elId).innerHTML = "";
-      new QRCode(document.getElementById(elId), { text, width: 200, height: 200 });
-    }
-
-    function setupDataChannel(dc) {
-      dc.onopen = () => document.getElementById("chat").style.display = "block";
-      dc.onmessage = e => {
-        const d = document.createElement("div");
-        d.textContent = "相手: " + e.data;
+    // DataChannel セットアップ
+    function setupDC(channel){
+      channel.onopen = ()=>document.getElementById("chat").style.display="block";
+      channel.onmessage = e=>{
+        const d=document.createElement("div");
+        d.textContent="相手: "+e.data;
         document.getElementById("messages").appendChild(d);
       };
     }
 
-    document.getElementById("create-offer").onclick = async () => {
-      dataChannel = pc.createDataChannel("chat");
-      setupDataChannel(dataChannel);
+    // ICE Gathering 完了待ち
+    function waitIceComplete(pc){
+      return new Promise(res=>{
+        if(pc.iceGatheringState==="complete") return res();
+        function chk(){
+          if(pc.iceGatheringState==="complete"){
+            pc.removeEventListener("icegatheringstatechange",chk);
+            res();
+          }
+        }
+        pc.addEventListener("icegatheringstatechange",chk);
+      });
+    }
 
+    // Offer 作成
+    document.getElementById("create-offer").onclick = async ()=>{
+      dc = pc.createDataChannel("chat"); setupDC(dc);
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      await waitIceGatheringComplete(pc); // ICE完了を待つ
+      await waitIceComplete(pc);
 
-      currentOfferSDP = JSON.stringify(pc.localDescription);
-      genQR("offer-qr", currentOfferSDP);
-      document.getElementById("set-remote-answer").disabled = false;
+      // 圧縮
+      offerCMP = LZString.compressToEncodedURIComponent(
+        JSON.stringify(pc.localDescription)
+      );
+      genQR("offer-qr", offerCMP);
+      document.getElementById("set-answer").disabled = false;
     };
 
-    document.getElementById("set-remote-answer").onclick = async () => {
-      if (pc.signalingState !== "have-local-offer") {
-        return alert(`signalingState は "${pc.signalingState}" です。先にOfferを作成してください。`);
-      }
-      const val = document.getElementById("remote-answer-sdp").value.trim();
-      if (!val) return alert("Answer SDP をペーストしてください");
-      const answer = JSON.parse(val);
-      try {
-        await pc.setRemoteDescription(answer);
-      } catch (e) {
-        alert("Answer設定エラー: " + e.message);
-      }
+    // Remote Answer 設定
+    document.getElementById("set-answer").onclick = async ()=>{
+      const comp = document.getElementById("remote-answer").value.trim();
+      if(!comp) return alert("Answer をペーストして下さい");
+      const json = JSON.parse(
+        LZString.decompressFromEncodedURIComponent(comp)
+      );
+      await pc.setRemoteDescription(json);
     };
 
-    document.getElementById("generate-answer").onclick = async () => {
-      const val = document.getElementById("remote-offer-sdp").value.trim();
-      if (!val) return alert("Offer SDP をペーストしてください");
+    // Answer 作成
+    document.getElementById("gen-answer").onclick = async ()=>{
+      const comp = document.getElementById("remote-offer").value.trim();
+      if(!comp) return alert("Offer をペーストして下さい");
+      const jsonOffer = JSON.parse(
+        LZString.decompressFromEncodedURIComponent(comp)
+      );
+      await pc.setRemoteDescription(jsonOffer);
 
-      const offer = JSON.parse(val);
-      await pc.setRemoteDescription(offer);
-
-      pc.ondatachannel = e => { dataChannel = e.channel; setupDataChannel(dataChannel); };
+      pc.ondatachannel = e=>{ dc = e.channel; setupDC(dc); };
 
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      await waitIceGatheringComplete(pc); // ICE完了を待つ
+      await waitIceComplete(pc);
 
-      currentAnswerSDP = JSON.stringify(pc.localDescription);
-      genQR("answer-qr", currentAnswerSDP);
+      // 圧縮
+      answerCMP = LZString.compressToEncodedURIComponent(
+        JSON.stringify(pc.localDescription)
+      );
+      genQR("answer-qr", answerCMP);
     };
 
-    document.getElementById("send").onclick = () => {
-      const txt = document.getElementById("message-input").value;
-      if (!txt || !dataChannel || dataChannel.readyState !== "open") return;
-      dataChannel.send(txt);
-      const d = document.createElement("div");
-      d.textContent = "あなた: " + txt;
+    // メッセージ送信
+    document.getElementById("send").onclick = ()=>{
+      const txt = document.getElementById("msg").value;
+      if(!txt||!dc||dc.readyState!=="open")return;
+      dc.send(txt);
+      const d=document.createElement("div");
+      d.textContent="あなた: "+txt;
       document.getElementById("messages").appendChild(d);
-      document.getElementById("message-input").value = "";
+      document.getElementById("msg").value="";
     };
 
-    document.getElementById("copy-offer").onclick = () => {
-      if (!currentOfferSDP) return alert("Offer が空です");
-      navigator.clipboard.writeText(currentOfferSDP).then(
-        () => alert("Offer をコピーしました"),
-        () => alert("コピーに失敗しました")
-      );
-    };
-    document.getElementById("copy-answer").onclick = () => {
-      if (!currentAnswerSDP) return alert("Answer が空です");
-      navigator.clipboard.writeText(currentAnswerSDP).then(
-        () => alert("Answer をコピーしました"),
-        () => alert("コピーに失敗しました")
-      );
-    };
+    // コピー機能
+    document.getElementById("copy-offer").onclick =
+      ()=>navigator.clipboard.writeText(offerCMP).then(()=>alert("Copied"));
+    document.getElementById("copy-answer").onclick =
+      ()=>navigator.clipboard.writeText(answerCMP).then(()=>alert("Copied"));
   </script>
 </body>
 </html>
