@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>データ取得と送信</title>
+  <script>
+    const GAS_SCRIPT_URL = "スクリプト公開URL"; // スクリプト公開URLを定義
+
+    function sendData() {
+      const type1 = document.getElementById("type1").value;
+      const type2 = document.getElementById("type2").value;
+      const japanese = document.getElementById("japanese").value;
+
+      const payload = JSON.stringify({
+        action: "appendData",
+        rows: [{ type1: type1, type2: type2, japanese: japanese }]
+      });
+
+      fetch(GAS_SCRIPT_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: payload
+      })
+        .then(response => response.json())
+        .then(data => {
+          document.getElementById("responseMessage").textContent = "送信成功！";
+        })
+        .catch(error => {
+          console.error("Error:", error);
+          document.getElementById("responseMessage").textContent = "送信エラー！";
+        });
+    }
+
+    function getRowsBelow() {
+      const startRow = document.getElementById("startRow").value;
+
+      const payload = JSON.stringify({
+        action: "getRowsBelow",
+        startRow: Number(startRow)
+      });
+
+      fetch(GAS_SCRIPT_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: payload
+      })
+        .then(response => response.json())
+        .then(data => {
+          const resultList = document.getElementById("result");
+          resultList.innerHTML = "";
+          data.rows.forEach(row => {
+            const listItem = document.createElement("li");
+            listItem.textContent = row.join(", ");
+            resultList.appendChild(listItem);
+          });
+        })
+        .catch(error => {
+          console.error("Error:", error);
+          document.getElementById("responseMessage").textContent = "取得エラー！";
+        });
+    }
+  </script>
+</head>
+<body>
+  <h1>スプレッドシート操作</h1>
+  <form id="getForm">
+    <input type="number" id="startRow" placeholder="取得開始行番号" required>
+    <button type="button" onclick="getRowsBelow()">取得</button>
+  </form>
+
+  <form id="sendForm">
+    <input type="text" id="type1" placeholder="データのタイプ1" required>
+    <input type="text" id="type2" placeholder="データのタイプ2" required>
+    <input type="text" id="japanese" placeholder="日本語のデータ" required>
+    <button type="button" onclick="sendData()">送信</button>
+  </form>
+
+  <p id="responseMessage"></p>
+  <ul id="result"></ul>
+</body>
+</html>
